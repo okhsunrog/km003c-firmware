@@ -103,7 +103,8 @@ Hard/Cable Reset, header data-object count, EOP and reflected CRC-32 verificatio
 Packets preserve the wire header and payload. Extended messages are raw chunks;
 there is no reassembly, GoodCRC generation or PD negotiation. The separate
 `pd::tx` module now generates waveform buffers offline, matching 162 native
-2.0.7 vectors; no hardware transmitter is started. See
+2.0.7 vectors. Passive builds do not start TX; the separate `pd-sink` feature now
+runs the active stack and has negotiated fixed voltages through 20 V. See
 [TX research and usbpd integration](pd-transmit.md).
 
 ```sh

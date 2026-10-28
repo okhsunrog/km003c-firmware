@@ -2,8 +2,8 @@
 //!
 //! Register settings follow native 1.9.9 init (device address 0x102c0), checked
 //! against DDL 3.3.0 and an offline Unicorn write trace. HW2.1 captured a
-//! CRC-valid PPS Request on PA0/CMP1_INP1; physical CC names remain unresolved.
-//! No PA0/PA1 AF4, PC14/PC15 output, Rd/Rp or GoodCRC writes are performed.
+//! CRC-valid PD on PA0/CC1 and PA1/CC2. This receiver never drives CC itself;
+//! the separate opt-in pd-tx-test owner temporarily borrows its stopped timer.
 use core::{
     future::poll_fn,
     sync::atomic::{AtomicU32, Ordering},
@@ -82,6 +82,10 @@ impl Drop for StopEvents {
 
 #[interrupt]
 fn INT008() {
+    #[cfg(feature = "pd-tx-test")]
+    if crate::pd_tx::on_interrupt(0) {
+        return;
+    }
     #[cfg(feature = "cdc-telemetry")]
     if crate::pd_buffered::enabled() {
         crate::pd_buffered::on_interrupt(0);
@@ -92,6 +96,11 @@ fn INT008() {
         END.store(read32(DCU + 8) & 0xffff, Ordering::Release);
         WAKER.wake();
     }
+}
+#[cfg(feature = "pd-tx-test")]
+#[interrupt]
+fn INT016() {
+    crate::pd_tx::on_interrupt(1);
 }
 #[interrupt]
 fn INT017() {
@@ -104,6 +113,10 @@ fn INT017() {
 }
 #[interrupt]
 fn INT018() {
+    #[cfg(feature = "pd-tx-test")]
+    if crate::pd_tx::on_interrupt(2) {
+        return;
+    }
     #[cfg(feature = "cdc-telemetry")]
     if crate::pd_buffered::enabled() {
         crate::pd_buffered::on_interrupt(2);
@@ -114,7 +127,7 @@ fn INT018() {
 
 pub struct Receiver {
     channel: Channel,
-    _routes: [Route; 3],
+    _routes: [Route; if cfg!(feature = "pd-tx-test") { 4 } else { 3 }],
 }
 impl Receiver {
     /// Passive snapshot after capture cancellation; no register reads clear
@@ -174,10 +187,10 @@ impl Receiver {
 
     /// # Safety
     /// Own TMRA2, CMP1/DAC1, DCU1, **all DMA1 channels**, corresponding AOS
-    /// trigger selectors and IRQ8/17/18. Configure the independently verified
+    /// trigger selectors and IRQ8/17/18 (also IRQ16 with pd-tx-test). Configure the independently verified
     /// analog input pad before calling. No task/IRQ may alter those resources.
-    /// Keep all CC transmit/termination GPIO outputs disabled separately.
-    /// This API does not establish that the selected input reaches a USB CC pin.
+    /// Keep all CC transmit/termination GPIO outputs disabled separately, except
+    /// when the exclusive board TX owner pauses RX and performs its handoff.
     pub unsafe fn new(input: Input, dac_code: u8) -> Result<Self, Error> {
         let [_, _, channel, _] = unsafe { dma::split(Unit::Dma1) }.map_err(Error::Dma)?;
         // First stop inherited event producers before routing CPU interrupts.
@@ -191,6 +204,9 @@ impl Receiver {
         let routes = unsafe {
             [
                 Route::new(0x103, Line::new(8).unwrap(), 5).map_err(Error::Routing)?,
+                #[cfg(feature = "pd-tx-test")]
+                Route::new(Unit::Dma1.complete_event(1).0, Line::new(16).unwrap(), 5)
+                    .map_err(Error::Routing)?,
                 Route::new(Unit::Dma1.complete_event(2).0, Line::new(17).unwrap(), 5)
                     .map_err(Error::Routing)?,
                 Route::new(Unit::Dma1.error_event().0, Line::new(18).unwrap(), 5)

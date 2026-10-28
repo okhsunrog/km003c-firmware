@@ -82,8 +82,9 @@ switch and are counted separately from buffer overruns.
 When neither/both inputs qualify, hold the last selection (initial fallback 1).
 Manual `pd start 1/2` stays available. This is a passive heuristic with a settling
 window, not a complete Type-C attach/role policy or a guarantee to catch the first
-packet after insertion. TX and GoodCRC generation are still absent; a future
-`usbpd` adapter must keep `HAS_AUTO_GOOD_CRC=false`.
+packet after insertion. The separate [active CC1 sink](pd-transmit.md) now uses
+`usbpd`, with `HAS_AUTO_GOOD_CRC=false`; it disables automatic mux changes while
+owning RX/TX and is never started by this passive command.
 
 [Preserved samples, comparisons and limits](../hardware/line-adc/README.md) include
 D+ and D− explicitly. D− has only a zero-level reference so far.

@@ -2,7 +2,7 @@
 //! Never enables CC termination, PA0/1 transmit or PA2/3 protocol outputs.
 use core::{
     cell::Cell,
-    sync::atomic::{AtomicU8, Ordering},
+    sync::atomic::{AtomicU8, AtomicU32, Ordering},
 };
 use embassy_hc32::{
     adc::InternalReference,
@@ -14,6 +14,13 @@ pub use km003c_drivers::lines::Sample;
 
 static LATEST: Mutex<CriticalSectionRawMutex, Cell<Option<Sample>>> = Mutex::new(Cell::new(None));
 static INPUT: AtomicU8 = AtomicU8::new(0);
+static UPDATED: AtomicU32 = AtomicU32::new(0);
+#[cfg(feature = "pd-tx-test")]
+pub fn fresh() -> Option<Sample> {
+    let age = (embassy_time::Instant::now().as_millis() as u32)
+        .wrapping_sub(UPDATED.load(Ordering::Acquire));
+    (age < 100).then(snapshot).flatten()
+}
 pub fn snapshot() -> Option<Sample> {
     LATEST.lock(Cell::get)
 }
@@ -38,7 +45,9 @@ fn stop(adc: &pac::Adc1) -> bool {
 
 #[embassy_executor::task]
 pub async fn task() {
-    // This task is the only ADC1/pad owner. CMP1 may read PA0/PA1 in parallel;
+    // This task owns ADC1 and initializes the pads. The opt-in TX probe may
+    // temporarily switch PA0 to AF4, restoring analog mode before RX resumes.
+    // No later ADC operation writes a pad configuration. CMP1 observes in parallel;
     // its DAC reference does not change CMP.RVADC or the ADC reference buffer.
     let adc = unsafe { pac::Adc1::steal() };
     let _pins = unsafe { [0, 1, 2, 3].map(|n| AnalogPin::new(Port::A, n)) };
@@ -99,6 +108,10 @@ pub async fn task() {
             None
         };
         LATEST.lock(|c| c.set(sample));
+        UPDATED.store(
+            embassy_time::Instant::now().as_millis() as u32,
+            Ordering::Release,
+        );
         let next = sample.and_then(|s| s.cc_input());
         if next == candidate {
             repeats = repeats.saturating_add(1);

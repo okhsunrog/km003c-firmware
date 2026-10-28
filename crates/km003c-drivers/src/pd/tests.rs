@@ -46,6 +46,30 @@ fn independent_crc_check_vector() {
     assert_eq!(crc32(&[]), 0);
 }
 #[test]
+fn burst_decoder_checks_crc_truncation_and_leading_noise() {
+    let wire = [1, 0];
+    let intervals = |crc| {
+        frame(&wire, ORDERED[0], crc)
+            .into_iter()
+            .flat_map(|b| if b { vec![20, 20] } else { vec![40] })
+            .collect::<Vec<_>>()
+    };
+    let good = intervals(0x58c223be);
+    assert!(matches!(burst::decode(&good, 20, 5), Ok(Some(Event::Packet(p))) if p.wire() == wire));
+    assert_eq!(
+        burst::decode(&intervals(0x58c223bf), 20, 5),
+        Err(Error::Crc)
+    );
+    assert_eq!(
+        burst::decode(&good[..good.len() - 12], 20, 5),
+        Err(Error::Truncated)
+    );
+    let mut noisy = vec![1, 1000, 20, 40, 999];
+    noisy.extend_from_slice(&good);
+    assert_eq!(burst::decode(&noisy, 20, 5), burst::decode(&good, 20, 5));
+    assert_eq!(burst::decode(&good, 0, 5), Err(Error::Timing));
+}
+#[test]
 fn known_goodcrc_frame_and_jitter() {
     // Header 0x0001 (GoodCRC, message ID 0), CRC cross-checked with Python zlib.
     let bits = frame(&[1, 0], [24, 24, 24, 17], 0x58c223be);
@@ -192,4 +216,8 @@ fn measured_pixel8pro_pps_request_with_filter_asymmetry() {
     assert_eq!(packets[0].sop, Sop::Sop);
     assert_eq!(packets[0].wire(), &[0x82, 0x16, 0x26, 0x9a, 0x03, 0x63]);
     assert_eq!(packets[0].crc, 0x8751d8b7);
+    assert_eq!(
+        burst::decode(&ticks[1..], 20, 5),
+        Ok(Some(Event::Packet(packets[0])))
+    );
 }

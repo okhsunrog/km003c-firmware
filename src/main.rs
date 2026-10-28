@@ -16,6 +16,10 @@ mod orientation;
 mod pd_buffered;
 #[cfg(feature = "pd-capture")]
 pub mod pd_capture;
+#[cfg(feature = "pd-sink")]
+mod pd_sink;
+#[cfg(feature = "pd-tx-test")]
+mod pd_tx;
 mod retention_log;
 #[cfg(feature = "cdc-telemetry")]
 mod telemetry;
@@ -85,6 +89,8 @@ core::arch::global_asm!(
 
 fn return_to_loader(status: u32) -> ! {
     cortex_m::interrupt::disable();
+    #[cfg(feature = "pd-tx-test")]
+    pd_tx::release();
     unsafe {
         write_volatile(MARKER.add(3), status);
         write_volatile(BOOT_REQUEST, 0x1234_5678);
@@ -109,7 +115,9 @@ fn main() -> ! {
     use embassy_hc32::clocks::{self, Config, Divider, Dividers, Mpll};
     unsafe {
         write_volatile(0x40050804 as *mut u32, 0x77);
-        write_volatile(0x40050800 as *mut u32, 0x22222222);
+        // DDL 3.3.0 BSP_CLK_Init at 200 MHz: SRAMH=0 waits, SRAM12/3/R=1.
+        // The earlier all-2 setting unnecessarily stalled the PD hot path.
+        write_volatile(0x40050800 as *mut u32, 0x11001111);
         write_volatile(0x40050804 as *mut u32, 0x76);
     }
     let clocks = unsafe {
@@ -132,6 +140,8 @@ fn main() -> ! {
     let hclk = clocks.hclk;
     assert_eq!(hclk, 192_000_000);
     log::info!("Clock readback: {clocks:?}");
+    #[cfg(feature = "pd-sink")]
+    pd_sink::init();
     embassy_hc32::time_driver::init(cp.SYST, hclk).unwrap();
     static EXECUTOR: static_cell::StaticCell<embassy_executor::Executor> =
         static_cell::StaticCell::new();
@@ -161,6 +171,8 @@ fn main() -> ! {
 #[exception]
 fn SysTick() {
     embassy_hc32::time_driver::systick_tick();
+    #[cfg(feature = "pd-tx-test")]
+    pd_tx::tick();
     static TICKS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
     let deadline = if cfg!(feature = "manual-ui-test") {
         600_000

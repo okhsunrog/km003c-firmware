@@ -3,12 +3,20 @@ name = "km003c-rust-smoke"
 version = "0.1.0"
 edition = "2024"
 
+# PD's software GoodCRC needs cross-crate optimization of the per-edge decoder.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
 [features]
 default = []
 # Hardware candidates are opt-in until separately accepted on this board.
 measurement = []
 measurement-reset-test = ["measurement"]
 pd-capture = []
+# Deliberate, leased CC1 attach / fixed Get_Source_Capabilities bench probe.
+pd-tx-test = ["pd-capture", "cdc-telemetry"]
+pd-sink = ["pd-tx-test", "dep:usbpd", "dep:usbpd-traits", "dep:uom"]
 orientation = []
 # NDJSON measurement/PD diagnostics instead of the byte echo protocol.
 cdc-telemetry = ["measurement"]
@@ -33,6 +41,9 @@ heapless = "0.9.3"
 km003c-drivers = { version = "0.1.0", path = "crates/km003c-drivers" }
 log = { version = "0.4.34", default-features = false }
 static_cell = "2.1.1"
+uom = { version = "0.36.0", default-features = false, features = ["si", "u32"], optional = true }
+usbpd = { version = "2.0.0", features = ["log"], optional = true }
+usbpd-traits = { version = "2.0.0", optional = true }
 
 [patch.crates-io]
 embassy-usb-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }

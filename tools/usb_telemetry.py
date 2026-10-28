@@ -71,6 +71,11 @@ def connect(libusb: str | None, wait: float):
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--libusb")
+    parser.add_argument(
+        "--sink",
+        choices=["5", "9", "12", "15", "20"],
+        help="Explicit unloaded-charger usbpd sink session (CC1)",
+    )
     parser.add_argument("--wait", type=float, default=10)
     parser.add_argument("--seconds", type=float, default=20)
     parser.add_argument("--output", type=Path, required=True)
@@ -93,16 +98,29 @@ def main() -> None:
         help="Use interrupt-rearmed double buffering with --pd",
     )
     parser.add_argument(
+        "--cc1-probe",
+        choices=["attach", "getcaps"],
+        help="Deliberate five-second unloaded-charger CC1 probe (no voltage Request)",
+    )
+    parser.add_argument(
         "--pause-read",
         type=float,
         default=0,
         help="Delay host reads to test backpressure",
     )
     args = parser.parse_args()
+    if args.sink and (args.cc1_probe or args.pd or args.pause_read):
+        parser.error("--sink is exclusive with capture/probe/backpressure options")
     if args.pd_continuous and not args.pd:
         parser.error("--pd-continuous requires --pd")
     if args.pd == "auto" and not args.pd_continuous:
         parser.error("--pd auto requires --pd-continuous")
+    if args.cc1_probe and (
+        args.pd != "1" or not args.pd_continuous or args.seconds < 7
+    ):
+        parser.error("--cc1-probe requires --pd 1 --pd-continuous and --seconds >= 7")
+    if args.cc1_probe == "getcaps" and args.pause_read:
+        parser.error("use the attach-only probe for host backpressure tests")
     counts: dict[str, int] = {}
     invalid = 0
     with connect(args.libusb, args.wait) as device, args.output.open("w") as output:
@@ -113,13 +131,34 @@ def main() -> None:
                 f"pd {'start ' if args.pd_continuous else ''}{args.pd}\n".encode(),
                 timeout=2000,
             )
+        if args.sink:
+            device.write(0x01, f"pd sink {args.sink}\n".encode(), timeout=2000)
         next_pd = time.monotonic() + 16
+        # Active controls stay explicit and fixed, with no arbitrary wire frame.
+        probe_start = time.monotonic() + 0.5
+        probe_attached = False
+        probe_sent = False
+        probe_paused = False
         synchronized = False
         pending = bytearray()
         deadline = time.monotonic() + args.seconds
-        if args.pause_read:
+        if args.pause_read and not args.cc1_probe:
             time.sleep(args.pause_read)
         while time.monotonic() < deadline:
+            if (
+                args.cc1_probe
+                and not probe_attached
+                and time.monotonic() >= probe_start
+            ):
+                device.write(0x01, b"pd attach 1\n", timeout=2000)
+                probe_attached = True
+            if (
+                args.cc1_probe == "getcaps"
+                and not probe_sent
+                and time.monotonic() >= probe_start + 0.35
+            ):
+                device.write(0x01, b"pd getcaps\n", timeout=2000)
+                probe_sent = True
             if (
                 args.repeat_pd
                 and not args.pd_continuous
@@ -153,14 +192,38 @@ def main() -> None:
                 output.write(json.dumps(record, separators=(",", ":")) + "\n")
                 output.flush()
                 counts[kind] = counts.get(kind, 0) + 1
+                if (
+                    args.cc1_probe == "attach"
+                    and args.pause_read
+                    and not probe_paused
+                    and kind == "adc"
+                    and record.get("uv", 0) >= 4_000_000
+                ):
+                    # First preserve an actual attached VBUS sample, then
+                    # stop host reads through expiry of the independent lease.
+                    output.write(
+                        json.dumps(
+                            {
+                                "type": "bench_pause",
+                                "seconds": args.pause_read,
+                                "device_ms": record["ms"],
+                            }
+                        )
+                        + "\n"
+                    )
+                    output.flush()
+                    probe_paused = True
+                    time.sleep(args.pause_read)
             if len(pending) > 4096:
                 raise RuntimeError("CDC record exceeds limit")
         device.write(
             0x01,
-            b"pd stop\nstream off\n" if args.pd_continuous else b"stream off\n",
+            b"pd stop\nstream off\n"
+            if args.pd_continuous or args.sink
+            else b"stream off\n",
             timeout=2000,
         )
-        if args.pd_continuous:
+        if args.pd_continuous or args.sink:
             # Read the final cumulative counters and acknowledgement. There may
             # still be queued records after the last timed read, so retain the
             # partial line rather than discarding it at the session boundary.
@@ -185,7 +248,10 @@ def main() -> None:
                     output.write(json.dumps(record, separators=(",", ":")) + "\n")
                     output.flush()
                     counts[kind] = counts.get(kind, 0) + 1
-                    if kind == "reply" and record.get("message") == "PD stopped":
+                    if kind == "reply" and record.get("message") in (
+                        "PD stopped",
+                        "PD sink stopped by command",
+                    ):
                         stopped = True
                         # Counters are formatted by a separate task. Allow its
                         # final snapshot to follow the control acknowledgement.

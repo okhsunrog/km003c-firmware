@@ -88,10 +88,17 @@ Short bench command: `uv run tools/bench.py capture-name --pd auto`.
 The [PD transmit analysis](docs/pd-transmit.md) now follows the installed 2.0.7
 code, including final timer completion and CC GPIO controls. An offline Rust
 encoder matches 162 native waveform vectors, and the driver crate optionally
-uses crates.io `usbpd` 2.0.0 for semantic decoding. Hardware TX and an active
-sink policy remain disabled until the analog circuit and error paths are
-validated; this work does not send requests to a connected charger.
-Both features remain disabled by default.
+uses crates.io `usbpd` 2.0.0 for semantic decoding. The opt-in `pd-tx-test` probe
+now enables CC1 sink attachment through PB6 and transmits a fixed
+Get_Source_Capabilities packet; a charger returned CRC-valid GoodCRC on hardware.
+The additional `pd-sink` feature runs the `usbpd` sink stack, including software
+GoodCRC, retries and fixed-PDO negotiation. Unloaded 5/9/12/15/20 V contracts
+passed on CC1, including about 19.98 V measured by INA229. Use
+`uv run tools/bench.py trigger --sink 20 --seconds 10` explicitly; it ends the
+session afterward. [Hardware evidence](hardware/pd-sink/README.md) records the
+image, captures, timings and limits. CC2 TX, PPS/EPR policy and a higher-resolution
+Embassy time backend remain open. PD stays off by default, and working custom
+images are kept installed between tests.
 
 The [HC32 HAL](https://github.com/okhsunrog/hc32f460-embassy-rs) provides PAC,
 interrupt routing and clock setup. The USB task runs on `embassy-executor` and

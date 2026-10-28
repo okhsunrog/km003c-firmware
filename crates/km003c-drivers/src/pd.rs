@@ -6,6 +6,7 @@
 //! or timestamps before feeding it. Timebase/tolerance are explicit and are not
 //! inferred from the native firmware's 19/38 tick transmission table.
 
+pub mod burst;
 pub mod tx;
 
 const DATA_SYMBOLS: [u8; 16] = [
@@ -68,13 +69,27 @@ pub enum Error {
 /// CRC-32/ISO-HDLC: reflected polynomial, initial/final XOR all ones. USB PD
 /// transmits its four result bytes least significant first. Check vector
 /// "123456789" -> 0xcbf43926 is independent of our synthetic packet encoder.
+const CRC_TABLE: [u32; 256] = {
+    let mut table = [0; 256];
+    let mut i = 0;
+    while i < 256 {
+        let mut crc = i as u32;
+        let mut bit = 0;
+        while bit < 8 {
+            crc = (crc >> 1) ^ (0xedb88320 & 0u32.wrapping_sub(crc & 1));
+            bit += 1;
+        }
+        table[i] = crc;
+        i += 1;
+    }
+    table
+};
+// One call per packet: avoid bitwise CRC register pressure in the per-bit loop.
+#[inline(never)]
 pub fn crc32(bytes: &[u8]) -> u32 {
     let mut crc = !0u32;
     for &byte in bytes {
-        crc ^= u32::from(byte);
-        for _ in 0..8 {
-            crc = (crc >> 1) ^ (0xedb88320 & 0u32.wrapping_sub(crc & 1));
-        }
+        crc = (crc >> 8) ^ CRC_TABLE[((crc ^ u32::from(byte)) & 0xff) as usize];
     }
     !crc
 }
@@ -140,6 +155,7 @@ impl Decoder {
             Ok(())
         }
     }
+    #[inline(always)]
     pub fn push_interval(&mut self, ticks: u16) -> Result<Option<Event>, Error> {
         let n = u32::from(ticks);
         let half = u32::from(self.half);
@@ -161,6 +177,9 @@ impl Decoder {
         }
         result
     }
+    // Keep the common per-bit path inside the caller. Otherwise the rare EOP
+    // CRC/copy branch forces a large saved-register/stack frame on EVERY bit.
+    #[inline(always)]
     fn bit(&mut self, bit: bool) -> Result<Option<Event>, Error> {
         if self.sop.is_none() {
             // Search at every bit position, so preamble and leading noise do
@@ -210,23 +229,7 @@ impl Decoder {
         self.symbol = 0;
         self.symbol_bits = 0;
         if symbol == 0x0d {
-            if self.expected == 0 || self.used != self.expected || self.low_nibble.is_some() {
-                return Err(Error::UnexpectedEop);
-            }
-            let size = self.used - 4;
-            let crc = u32::from_le_bytes(self.bytes[size..self.used].try_into().unwrap());
-            if crc32(&self.bytes[..size]) != crc {
-                return Err(Error::Crc);
-            }
-            let mut packet = Packet {
-                sop: self.sop.unwrap(),
-                bytes: [0; 30],
-                len: size as u8,
-                crc,
-            };
-            packet.bytes[..size].copy_from_slice(&self.bytes[..size]);
-            self.reset();
-            return Ok(Some(Event::Packet(packet)));
+            return self.end_packet();
         }
         if self.expected != 0 && self.used == self.expected {
             return Err(Error::MissingEop);
@@ -246,6 +249,28 @@ impl Decoder {
             self.low_nibble = Some(nibble);
         }
         Ok(None)
+    }
+    // Inline the state access so LLVM can keep flags/counters in registers
+    // through the burst; only crc32 receives a byte slice at the packet end.
+    #[inline(always)]
+    fn end_packet(&mut self) -> Result<Option<Event>, Error> {
+        if self.expected == 0 || self.used != self.expected || self.low_nibble.is_some() {
+            return Err(Error::UnexpectedEop);
+        }
+        let size = self.used - 4;
+        let crc = u32::from_le_bytes(self.bytes[size..self.used].try_into().unwrap());
+        if crc32(&self.bytes[..size]) != crc {
+            return Err(Error::Crc);
+        }
+        let mut packet = Packet {
+            sop: self.sop.unwrap(),
+            bytes: [0; 30],
+            len: size as u8,
+            crc,
+        };
+        packet.bytes[..size].copy_from_slice(&self.bytes[..size]);
+        self.reset();
+        Ok(Some(Event::Packet(packet)))
     }
 }
 

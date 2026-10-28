@@ -6,9 +6,53 @@ BMC transitions, and uses CMP1/DAC1/timer capture for RX. No dedicated HC32 PD
 peripheral or automatic hardware GoodCRC engine has been identified. The USB FS
 PHY on PA11/PA12 is a separate peripheral.
 
-The Rust project now has an offline TX encoder and optional crates.io `usbpd`
-2.0.0 decoding. **No hardware transmitter or running sink policy is enabled.**
-The connected Pixel was removed before this work; all new tests are on the host.
+The opt-in `pd-tx-test` feature now has a **hardware-tested CC1 transmitter**:
+an unloaded charger acknowledges the fixed Get_Source_Capabilities packet with
+GoodCRC. PB6 enables the CC1 sink attachment path. Pixel remains disconnected.
+The `pd-sink` feature now runs the crates.io `usbpd` 2.0.0 sink stack with
+software GoodCRC, message IDs, retries and Request/Accept/PS_RDY negotiation.
+Fixed 5/9/12/15/20 V contracts were accepted with an unloaded charger. CC2 TX,
+PPS and EPR policy are not implemented. Passive monitoring stays separate.
+
+## Hardware-tested probe
+
+Build with `--features pd-tx-test,orientation,manual-ui-test`. Nothing drives CC
+until an explicit CDC command. `pd attach 1` arms RX on CC1, then drives PB6 high
+for five seconds. The command requires a fresh line sample, unloaded VBUS below
+5.5 V, CC1 above 2.5 V and CC2 below 0.4 V. These preconditions match the tested
+charger's detached state; they are not a general Type-C attach algorithm.
+
+`pd getcaps` permits exactly one SOP Get_Source_Capabilities packet (`87 00`,
+PD3.0 sink/UFP, MessageID 0) during that lease. It requires CC1 in 0.4..2.15 V,
+no active XTAL32 on PC14/15 and an idle receiver. There are no arbitrary-frame,
+Request, EPR or reset commands. This probe cannot select a supply voltage.
+
+TX uses a dedicated static buffer, DMA1 CH1 and TimerA2 PA0 AF4. The DMA IRQ
+holds the final interval; the following overflow IRQ disables OUTEN/PC14,
+restores PA0 analog mode and rearms RX immediately. ADC1's watchdog stays off.
+IRQ transitions and SysTick cleanup share a critical section. A five-millisecond
+TX deadline and the five-second CC lease are enforced independently of the
+capture executor and CDC. `pd stop`, actual USB disconnect and fault/reset also
+release the controls. Dropping a host interface alone need not cause a USB
+disconnect, so the independent lease is essential. DMA storage stays valid
+even on failure; another transfer cannot reuse it without proving CH1 stopped.
+
+The hardware test observed CC1 changing from about 3.18 V to 1.63 V and VBUS
+rising to about 4.99 V. The charger returned CRC-valid SOP GoodCRC `a1 01`,
+MessageID 0, in each TX run. PB6 low restored the detached state and VBUS near
+zero. Source Capabilities retry because this probe does not acknowledge them or
+request a contract. ACK reception establishes a working transmitter with this
+charger; it does not measure analog impedance, BMC timing compliance or
+microsecond turnaround. Captured `end_us` still has 1 ms resolution.
+
+[Captures, image identity, counters and recovery evidence](../hardware/pd-sink/README.md)
+include a host-read stall across lease expiry. Forced CDC backpressure can drop
+records and leave an interrupted line; it is separate from DMA capture loss.
+
+```sh
+uv run tools/bench.py attach --pd 1 --seconds 8 --cc1-probe attach
+uv run tools/bench.py tx --pd 1 --seconds 8 --cc1-probe getcaps
+```
 
 ## Verified 2.0.7 code
 
@@ -116,12 +160,13 @@ lacked that PB6 write. For selector 2, it enables PC15 pull-up, drives PC14
 high/enabled, latches P1_6 low and P0_3 low/enabled. These sequences are why
 PC14/PC15 cannot be treated as simple independent TX-enable pins.
 
-The firmware proves that these signals participate in CC attachment/role and
-transmit behavior. It does not prove transistor topology, resistor values,
+The firmware and CC1 probe establish that these signals participate in CC
+attachment/role and transmit behavior. PB6 high has now enabled sink attachment
+on CC1 with an unloaded charger. This does not prove transistor topology, resistor values,
 active polarity at a hidden switch, direct CC continuity, VCONN routing, or the
 physical implementation of the lightning button's startup pulldown. Labeling
-PB6/P0_3 as confirmed Rd controls or PC14/15 pull-ups as confirmed Rp resistors
-would still go beyond this evidence. Continuity/component tracing and analog
+P0_3 as a hardware-confirmed CC2 Rd control or PC14/15 pull-ups as confirmed Rp
+resistors would still go beyond this evidence. Continuity/component tracing and analog
 level/impedance measurements remain necessary to finish the schematic.
 
 ## Encoding verified without the device
@@ -156,40 +201,83 @@ cargo test --manifest-path crates/km003c-drivers/Cargo.toml --locked \
 `KM003C_STOCK_207` overrides the script's cached default input path. It refuses
 any binary whose SHA-256 differs from the preserved installed 2.0.7 image.
 
-## usbpd driver contract and next implementation step
+## Running the usbpd sink
 
 `usbpd` **2.0.0 from crates.io** is an optional `km003c-drivers` dependency.
 The offline `pd_decode` example uses it with `--features usbpd` for SOP semantic
 parsing; cable-addressed SOP′/SOP″ traffic is kept distinct. This already builds
 for the HC32 target as well as the host. No git fork or main dependency is used.
 
-For a future `usbpd_traits::Driver` adapter, keep
+The board implements `usbpd_traits::Driver` with
 `HAS_AUTO_GOOD_CRC=false` and `HAS_AUTO_RETRY=false`. Native task `0x1ed58` also
 constructs a two-byte GoodCRC in software, then calls the normal TX function;
 this is conditional on the native mode/state flags. It is not evidence of
 automatic hardware acknowledgement, or a reason to acknowledge packets while
 operating as a passive monitor.
 
-The adapter needs these concrete boundaries:
+The adapter uses these ownership boundaries:
 
 - One owner for the RX/TX timer, CMP/DAC, DMA1 CH1/2, mux and frame buffers.
-- `receive`: deliver only CRC-valid SOP header/data bytes, excluding PHY framing
-  and CRC; surface Hard Reset. Preserve cable traffic in the monitor separately.
-- `transmit`: encode into permanently owned TX storage, check carrier, switch
-  RX→TX, await final timer completion, release outputs and restore RX. Every
-  cancellation/error path must quiesce DMA before memory reuse.
+- `receive`: delivers only CRC-valid SOP header/data bytes, excluding PHY framing
+  and CRC; surfaces Hard Reset. Cable traffic stays in diagnostics separately.
+- `transmit`: encodes into permanently owned TX storage, checks carrier, switches
+  RX→TX, awaits final timer completion, releases outputs and restores RX. DMA
+  must settle before memory reuse, including cancellation/error paths.
 - Fast receive/protocol work runs outside thread-mode UI/JSON formatting. Software
   GoodCRC must not depend on CDC queues or the 20 ms ADC polling interval.
 - `wait_for_vbus` uses the INA229 measurement, while CC attach/termination policy
   is separately owned. Automatic receiver mux changes must not race a TX frame.
-- An explicit sink device-policy manager chooses allowed requests. The crate's
-  default requests 5 V at the source's maximum current; adding or running the
-  stack is already active participation, not passive observation.
+- An explicit DPM selects an advertised fixed PDO at 100 mA, falling back to
+  5 V when unavailable. It does not use the crate's highest-current default.
 
-The published timer trait uses milliseconds, but the immediate GoodCRC send path
-can start TX without awaiting a millisecond timer. Actual EOP-to-ACK delay still
-needs cycle/external measurements. The measured RX rearm work is not that delay.
-Do not advertise auto-GoodCRC based on the presence of timer/DMA alone.
+```sh
+cargo build --release --locked --features pd-sink,orientation,manual-ui-test
+uv run tools/bench.py trigger-20v --sink 20 --seconds 10
+```
+
+CDC accepts `pd sink 5`, `9`, `12`, `15` or `20`. Each explicit session starts
+on detached CC1, runs for up to 20 seconds and releases PB6 on stop/cancellation.
+An independent 30-second CC lease still bounds a stalled task. No session starts
+on USB enumeration. `pd stop`, Exit and `loader` retain recovery behavior.
+
+## Timing and profiling
+
+The 1 kHz HAL time driver cannot supply the crate's one-millisecond CRCReceive
+timeout directly: its rounded-down `now()` can make a one-tick wait end almost
+immediately. Only that short deadline uses a rescheduled DWT poll lasting a full
+192,000 CPU cycles. Other timers remain async Embassy timers. This bounded poll
+can occupy the decoder executor for up to one millisecond; a hardware-alarm time
+backend is the intended replacement. A 32,768 Hz time base is sufficient for
+these protocol timers; changing the feature alone does not fix the driver, and
+does not require 32,768 interrupts per second.
+
+`DEMCR.TRCENA` and `DWT_CTRL.CYCCNTENA` enable profiling. `end_cycles` is recorded
+when the RX IRQ ends a frame; `rx_to_tx_cycles` stops immediately before starting
+the TX timer. Use wrapping subtraction and divide cycles by 192 for nominal µs.
+The RX mark follows the approximately 12.75 µs quiet gap, so this is not itself
+an external EOP timestamp. Captures preserve both cycle counts and the unchanged
+one-millisecond-resolution `end_us` field.
+
+The completed-burst decoder keeps symbol state in local variables; the separate
+streaming decoder remains available. It validates CRC before delivery and is
+cross-checked against all 162 native vectors and a captured Pixel Request.
+Its hot loop runs in zero-wait SRAMH. Startup follows DDL 3.3.0's 200 MHz example:
+SRAMH zero waits, SRAM12/3/R one wait, flash five waits with cache. Linker symbols
+and a build assertion protect cortex-m-rt's normal data-copy boundary.
+
+`decode_phase_cycles` contains ordered-set search, payload BMC/4b5b, CRC and
+packet assembly/return times. A six-PDO Source Capabilities frame measured about
+19.3 / 45.9 / 2.8 / 1.4 µs respectively, with about 74 µs in the driver decode
+path. GoodCRC TX starts about 127 µs after the RX mark (about 140 µs including
+the quiet gap), below the 195 µs tTransmit limit in these runs. This is software
+instrumentation, not an electrical compliance measurement. See the
+[onsemi timing table](https://www.onsemi.com/pdf/datasheet/fusb302b-d.pdf), page 16;
+that page was extracted using the user's `mistral_ocr --pages 16` CLI.
+
+Packed interval checks using Cortex-M4 `UQSUB16`/`USUB16` are a possible next
+optimization. A standalone compiled UQSUB16 pair-range check is shorter than
+the scalar Rust equivalent, but its effect on the complete decoder has not been
+measured and no DSP assembly is enabled in this firmware.
 
 Sources: [published driver contract](https://docs.rs/usbpd-traits/2.0.0/usbpd_traits/trait.Driver.html),
 [published sink policy](https://docs.rs/usbpd/2.0.0/usbpd/sink/device_policy_manager/trait.DevicePolicyManager.html),

@@ -1,4 +1,4 @@
-# CDC measurement and passive PD diagnostics
+# CDC measurement and PD diagnostics
 
 Build the line protocol instead of the original binary echo test:
 
@@ -23,11 +23,16 @@ image and `tools/usb_echo.py` remain available for USB transport regression test
 | `pd stop` | Stop continuous receive and publish counters |
 | `pd 1` | One passive burst from CMP1_INP1 / PA0 |
 | `pd 2` | One passive burst from CMP1_INP2 / PA1 |
+| `pd attach 1` | With `pd-tx-test` only: unloaded CC1 sink attachment for five seconds |
+| `pd getcaps` | With `pd-tx-test` only: one fixed Get_Source_Capabilities per lease |
+| `pd sink 5/9/12/15/20` | With `pd-sink`: negotiate the selected fixed voltage on CC1 for up to 20 seconds |
 | `loader` | Request native DFU and reset |
 
 PD commands require `pd-capture`. On the tested HW2.1, inputs 1/2 correspond to
 CC1/CC2 on PA0/PA1. Inputs become analog with outputs and pull-ups disabled. TX
-outputs, VCOUT, CC termination and GoodCRC generation remain disabled. DAC code
+outputs, VCOUT, CC termination and GoodCRC generation remain disabled in passive
+builds. The separate [bounded CC1 TX probe](pd-transmit.md) requires `pd-tx-test`
+and explicit attach/GetCaps commands. `pd stop` also releases its outputs. DAC code
 `0x20` follows the native configuration. Only a command starts acquisition.
 
 ADC records contain `seq`, device uptime `ms`, `uv`, signed `ua` (or null),
@@ -97,9 +102,23 @@ NixOS store paths), and stores NDJSON under
 write is hidden in this helper. The lower-level `usb_telemetry.py` still accepts
 explicit paths and single-burst options.
 
+`uv run tools/bench.py trigger --sink 20 --seconds 10` runs an explicit active
+sink session without passive/probe options. `pd_sink` records distinguish
+`starting`, `request`, `contract_ready` (after PS_RDY), and `detached`.
+`pd_tx` records preserve transmitted bytes plus DWT cycle timings and the four
+decode phases documented in [PD transmission](pd-transmit.md). ADC records
+provide the independent measured voltage. These commands change charger output;
+the hardware acceptance tests used an unloaded charger, with Pixel disconnected.
+
 `--pd-continuous --pd 1` starts buffered capture and stops it after recording.
 `--pd-continuous --pd auto` uses automatic selection.
 `--pause-read 10` deliberately delays host reads for a backpressure check.
+`--cc1-probe attach` / `getcaps` explicitly exercise the five-second test lease;
+they require `--pd 1` and at least seven seconds. With the attach probe,
+`--pause-read 6` waits for an observed VBUS above 4 V before pausing reads,
+records `bench_pause` on the host and tests expiry while CDC is stalled. Lost
+or interrupted CDC records are expected under a long stall; malformed fragments
+are counted and still make the recorder return an error.
 `--repeat-pd` repeats the selected burst command every 16 seconds. `--loader`
 returns to native DFU after recording. Supply `--libusb PATH` if the system
 cannot discover its native library. The tool checks the product string, detaches

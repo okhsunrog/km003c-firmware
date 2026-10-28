@@ -39,6 +39,10 @@ AW9523B helper `0x1a9c8` writes output register 2 and direction register 4.
 The startup pressed path selects mode 1. This establishes software involvement;
 the actual resistor/switch network and independent passive effects still need
 continuity measurements. Do not assume PB6 alone is the complete Rd circuit.
+The later Rust [CC1 bench probe](../pd-transmit.md) now confirms the function:
+PB6 high changes CC1 from about 3.18 V to 1.63 V and makes an unloaded charger
+provide about 4.99 V; PB6 low detaches it. Resistance and transistor topology
+remain unmeasured, and the AW9523 P0_3 CC2 path is not TX-tested yet.
 These function addresses are runtime addresses in the repository's older
 1.9.9 image, rather than file offsets or proof of the installed build's layout.
 

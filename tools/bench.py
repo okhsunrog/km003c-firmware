@@ -1,7 +1,8 @@
 """Short bench capture command; all long paths and host defaults live here.
 
 Run with uv run tools/bench.py NAME [--pd 1|2]. Hardware writes/firmware updates
-are deliberately outside this read/record helper; --loader is an explicit reset.
+are opt-in: --cc1-probe tests a fixed 5-second CC1 attach/GetCaps sequence;
+--loader is an explicit reset. This helper never writes firmware.
 """
 
 import argparse
@@ -36,6 +37,8 @@ def main() -> None:
     parser.add_argument("--seconds", type=float, default=30)
     parser.add_argument("--pause-read", type=float, default=0)
     parser.add_argument("--loader", action="store_true")
+    parser.add_argument("--cc1-probe", choices=["attach", "getcaps"])
+    parser.add_argument("--sink", choices=["5", "9", "12", "15", "20"])
     parser.add_argument(
         "--dry-run", action="store_true", help="Print command without accessing USB"
     )
@@ -67,6 +70,10 @@ def main() -> None:
         command += ["--pause-read", str(args.pause_read)]
     if args.loader:
         command.append("--loader")
+    if args.cc1_probe:
+        command += ["--cc1-probe", args.cc1_probe]
+    if args.sink:
+        command += ["--sink", args.sink]
     if args.dry_run:
         import shlex
 

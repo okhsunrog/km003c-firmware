@@ -184,6 +184,8 @@ mod tests {
                 }
             }
             decoder.finish().unwrap();
+            let intervals: Vec<_> = output[..count].iter().map(|n| n + 1).collect();
+            assert_eq!(crate::pd::burst::decode(&intervals, 20, 5).unwrap(), event);
             match (frame, event.unwrap()) {
                 (Frame::Packet { sop, wire }, Event::Packet(p)) => {
                     assert_eq!(p.sop, sop);

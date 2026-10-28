@@ -1,0 +1,219 @@
+{
+  "features": "pd-sink,orientation,manual-ui-test",
+  "hclk_hz": 192000000,
+  "device_hw": "2.1",
+  "application_base": "0x4000",
+  "usbpd": "2.0.0",
+  "application_readback_matches_package": true,
+  "bootloader_unchanged": true,
+  "bootloader_sha256": "17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf",
+  "image_sha256": "3f4c75da7402b8eb6fff8b585f1d1d526b88ec90339c330f871925265e7da54d",
+  "source": "unloaded charger; Pixel disconnected",
+  "tests": [
+    {
+      "target_volts": 5,
+      "median_uv": 4989447,
+      "steady_min_uv": 4986712,
+      "steady_max_uv": 4991400,
+      "stages": [
+        "starting",
+        "request",
+        "contract_ready",
+        "detached"
+      ],
+      "rx_packets": 8,
+      "tx_packets": 4,
+      "ack_rx_to_tx_us": [
+        127.140625,
+        82.97395833333333,
+        83.78645833333333
+      ],
+      "source_cap_phase_us": [
+        19.270833333333332,
+        45.885416666666664,
+        2.84375,
+        1.3958333333333333
+      ],
+      "stats": {
+        "type": "pd_stats",
+        "frames": 12,
+        "overruns": 0,
+        "held_overruns": 0,
+        "noise": 4,
+        "full": 0,
+        "dma_errors": 0,
+        "mismatches": 0,
+        "stop_faults": 0,
+        "input_switches": 0,
+        "switch_discards": 0,
+        "max_handler_cycles": 519,
+        "decode_errors": 0,
+        "sync_errors": 0
+      }
+    },
+    {
+      "target_volts": 9,
+      "median_uv": 8989837,
+      "steady_min_uv": 8989251,
+      "steady_max_uv": 8992181,
+      "stages": [
+        "starting",
+        "request",
+        "contract_ready",
+        "detached"
+      ],
+      "rx_packets": 5,
+      "tx_packets": 4,
+      "ack_rx_to_tx_us": [
+        126.953125,
+        82.86979166666667,
+        84.66145833333333
+      ],
+      "source_cap_phase_us": [
+        19.270833333333332,
+        45.901041666666664,
+        2.75,
+        1.3958333333333333
+      ],
+      "stats": {
+        "type": "pd_stats",
+        "frames": 15,
+        "overruns": 6,
+        "held_overruns": 0,
+        "noise": 4,
+        "full": 0,
+        "dma_errors": 0,
+        "mismatches": 0,
+        "stop_faults": 0,
+        "input_switches": 0,
+        "switch_discards": 0,
+        "max_handler_cycles": 517,
+        "decode_errors": 0,
+        "sync_errors": 0
+      }
+    },
+    {
+      "target_volts": 12,
+      "median_uv": 11984369,
+      "steady_min_uv": 11983197,
+      "steady_max_uv": 11987103,
+      "stages": [
+        "starting",
+        "request",
+        "contract_ready",
+        "detached"
+      ],
+      "rx_packets": 5,
+      "tx_packets": 4,
+      "ack_rx_to_tx_us": [
+        127.09895833333333,
+        83.015625,
+        83.43229166666667
+      ],
+      "source_cap_phase_us": [
+        19.270833333333332,
+        45.901041666666664,
+        2.75,
+        1.3958333333333333
+      ],
+      "stats": {
+        "type": "pd_stats",
+        "frames": 17,
+        "overruns": 6,
+        "held_overruns": 0,
+        "noise": 6,
+        "full": 0,
+        "dma_errors": 0,
+        "mismatches": 0,
+        "stop_faults": 0,
+        "input_switches": 0,
+        "switch_discards": 0,
+        "max_handler_cycles": 518,
+        "decode_errors": 0,
+        "sync_errors": 0
+      }
+    },
+    {
+      "target_volts": 15,
+      "median_uv": 14982611,
+      "steady_min_uv": 14979095,
+      "steady_max_uv": 14983587,
+      "stages": [
+        "starting",
+        "request",
+        "contract_ready",
+        "detached"
+      ],
+      "rx_packets": 5,
+      "tx_packets": 4,
+      "ack_rx_to_tx_us": [
+        127.078125,
+        82.97395833333333,
+        83.34895833333333
+      ],
+      "source_cap_phase_us": [
+        19.270833333333332,
+        45.901041666666664,
+        2.75,
+        1.3958333333333333
+      ],
+      "stats": {
+        "type": "pd_stats",
+        "frames": 14,
+        "overruns": 6,
+        "held_overruns": 0,
+        "noise": 3,
+        "full": 0,
+        "dma_errors": 0,
+        "mismatches": 0,
+        "stop_faults": 0,
+        "input_switches": 0,
+        "switch_discards": 0,
+        "max_handler_cycles": 516,
+        "decode_errors": 0,
+        "sync_errors": 0
+      }
+    },
+    {
+      "target_volts": 20,
+      "median_uv": 19981244,
+      "steady_min_uv": 19979876,
+      "steady_max_uv": 19982611,
+      "stages": [
+        "starting",
+        "request",
+        "contract_ready",
+        "detached"
+      ],
+      "rx_packets": 5,
+      "tx_packets": 4,
+      "ack_rx_to_tx_us": [
+        127.09895833333333,
+        83.015625,
+        83.515625
+      ],
+      "source_cap_phase_us": [
+        19.270833333333332,
+        45.901041666666664,
+        2.75,
+        1.3958333333333333
+      ],
+      "stats": {
+        "type": "pd_stats",
+        "frames": 14,
+        "overruns": 6,
+        "held_overruns": 0,
+        "noise": 3,
+        "full": 0,
+        "dma_errors": 0,
+        "mismatches": 0,
+        "stop_faults": 0,
+        "input_switches": 0,
+        "switch_discards": 0,
+        "max_handler_cycles": 519,
+        "decode_errors": 0,
+        "sync_errors": 0
+      }
+    }
+  ]
+}

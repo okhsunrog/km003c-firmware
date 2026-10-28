@@ -11,6 +11,12 @@ impl log::Log for Logger {
         true
     }
     fn log(&self, record: &log::Record<'_>) {
+        // The software GoodCRC path must not format verbose stack messages
+        // before starting TX. Packet diagnostics are queued by the board driver.
+        #[cfg(feature = "pd-sink")]
+        if record.target().starts_with("usbpd") && record.level() > log::Level::Warn {
+            return;
+        }
         if matches!(record.args().as_str(), Some("irq" | "SETUP waiting")) {
             return;
         }

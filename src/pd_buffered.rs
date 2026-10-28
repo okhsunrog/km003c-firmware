@@ -29,6 +29,7 @@ pub struct Meta {
     pub error: u8,
     pub sequence: u32,
     pub end_us: u64,
+    pub end_cycles: u32,
 }
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Stats {
@@ -95,6 +96,17 @@ fn arm(slot: usize) {
 pub fn enabled() -> bool {
     ENABLED.load(Ordering::Acquire)
 }
+/// Rearm immediately after the final TX interval, before task/JSON scheduling.
+/// TX exclusively owns the stopped timer here; pool ownership is unchanged.
+#[cfg(feature = "pd-tx-test")]
+pub fn resume_after_tx() {
+    STATE.lock(|cell| {
+        if let Some(s) = cell.borrow_mut().as_mut() {
+            s.running = true;
+            arm(s.pool.active());
+        }
+    });
+}
 /// Timer overflow, DMA completion or DMA fault dispatch from their own IRQs.
 /// This disables producers, settles DMA, validates length, changes ownership and
 /// rearms before waking the decoder. It never formats text, copies or decodes.
@@ -156,6 +168,7 @@ pub fn on_interrupt(kind: u8) {
             error,
             sequence: s.stats.frames,
             end_us: embassy_time::Instant::now().as_micros(),
+            end_cycles: r(0xe0001004),
         };
         if let Some(done) = s.pool.complete() {
             s.meta[done] = meta;

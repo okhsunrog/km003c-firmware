@@ -19,6 +19,12 @@ enum PdCommand {
     Once(u8),
     Start(u8),
     Stop,
+    #[cfg(feature = "pd-tx-test")]
+    Attach,
+    #[cfg(feature = "pd-tx-test")]
+    GetCaps,
+    #[cfg(feature = "pd-sink")]
+    Sink(u16),
 }
 #[cfg(feature = "pd-capture")]
 static PD: Channel<CriticalSectionRawMutex, PdCommand, 4> = Channel::new();
@@ -68,7 +74,27 @@ fn command(text: &str) {
         }
         #[cfg(feature = "pd-capture")]
         "pd stop" => {
+            #[cfg(feature = "pd-tx-test")]
+            crate::pd_tx::release();
             if PD.try_send(PdCommand::Stop).is_err() {
+                reply("PD busy");
+            }
+        }
+        #[cfg(feature = "pd-tx-test")]
+        "pd attach 1" | "pd getcaps" => {
+            let cmd = if text.trim() == "pd attach 1" {
+                PdCommand::Attach
+            } else {
+                PdCommand::GetCaps
+            };
+            if PD.try_send(cmd).is_err() {
+                reply("PD busy");
+            }
+        }
+        #[cfg(feature = "pd-sink")]
+        "pd sink 5" | "pd sink 9" | "pd sink 12" | "pd sink 15" | "pd sink 20" => {
+            let volts = text.trim().rsplit(' ').next().unwrap().parse().unwrap();
+            if PD.try_send(PdCommand::Sink(volts)).is_err() {
                 reply("PD busy");
             }
         }
@@ -104,6 +130,8 @@ pub async fn receive<'a>(mut receiver: Receiver<'a, Driver<'a>>) {
             }
         }
         ONLINE.store(false, Ordering::Relaxed);
+        #[cfg(feature = "pd-tx-test")]
+        crate::pd_tx::release();
         OUT.clear();
         #[cfg(feature = "pd-capture")]
         {
@@ -222,6 +250,14 @@ pub fn start_capture_task() {
 #[cfg(feature = "pd-capture")]
 #[derive(Clone, Copy)]
 enum PdReport {
+    #[cfg(feature = "pd-sink")]
+    Tx {
+        bytes: [u8; 30],
+        len: usize,
+        ack_cycles: u32,
+        decode_cycles: u32,
+        phases: [u32; 4],
+    },
     Input {
         input: u8,
     },
@@ -261,6 +297,38 @@ fn report(value: PdReport) {
     if REPORTS.try_send(value).is_err() {
         DROPPED.fetch_add(1, Ordering::Relaxed);
     }
+}
+#[cfg(feature = "pd-sink")]
+pub(crate) fn sink_rx(event: km003c_drivers::pd::Event, meta: crate::pd_buffered::Meta) {
+    report(PdReport::Event {
+        event,
+        burst: meta.sequence,
+        input: meta.input,
+        end_us: meta.end_us,
+    });
+}
+#[cfg(feature = "pd-sink")]
+pub(crate) fn sink_tx(data: &[u8]) {
+    let mut bytes = [0; 30];
+    bytes[..data.len()].copy_from_slice(data);
+    let (ack_cycles, decode_cycles) = crate::pd_sink::timing();
+    report(PdReport::Tx {
+        bytes,
+        len: data.len(),
+        ack_cycles,
+        decode_cycles,
+        phases: crate::pd_sink::phases(),
+    });
+}
+#[cfg(feature = "pd-sink")]
+pub(crate) fn sink_status(state: &str, mv: u32) {
+    let mut line = Line::new();
+    writeln!(
+        line,
+        "{{\"type\":\"pd_sink\",\"state\":\"{state}\",\"target_mv\":{mv}}}"
+    )
+    .unwrap();
+    emit(line);
 }
 #[cfg(feature = "pd-capture")]
 fn pd_stats(r: &crate::pd_buffered::Buffered) {
@@ -316,6 +384,24 @@ pub async fn pd_reports() {
         let record = REPORTS.receive().await;
         let mut line = Line::new();
         match record {
+            #[cfg(feature = "pd-sink")]
+            PdReport::Tx {
+                bytes,
+                len,
+                ack_cycles,
+                decode_cycles,
+                phases,
+            } => {
+                write!(line, "{{\"type\":\"pd_tx\",\"wire_hex\":\"").unwrap();
+                for b in &bytes[..len] {
+                    write!(line, "{b:02x}").unwrap();
+                }
+                writeln!(
+                    line,
+                    "\",\"rx_to_tx_cycles\":{ack_cycles},\"decode_cycles\":{decode_cycles},\"decode_phase_cycles\":{phases:?}}}"
+                )
+                .unwrap();
+            }
             PdReport::Input { input } => {
                 writeln!(line, "{{\"type\":\"pd_input\",\"input\":{input}}}").unwrap();
             }
@@ -419,8 +505,13 @@ pub async fn captures() {
                         streaming = false;
                         reply("PD stopped on DMA quiescence fault");
                     }
+                    #[cfg(feature = "pd-tx-test")]
+                    let may_switch = !crate::pd_tx::attached();
+                    #[cfg(not(feature = "pd-tx-test"))]
+                    let may_switch = true;
                     if automatic
                         && streaming
+                        && may_switch
                         && let Some(next) = crate::lines::cc_input()
                         && next != input
                     {
@@ -452,6 +543,8 @@ pub async fn captures() {
             continue;
         };
         if let PdCommand::Stop = command {
+            #[cfg(feature = "pd-tx-test")]
+            crate::pd_tx::release();
             if let Some(r) = receiver.as_mut() {
                 r.stop();
                 pd_stats(r);
@@ -460,11 +553,38 @@ pub async fn captures() {
             reply("PD stopped");
             continue;
         }
-        // The line-ADC task owns PA0/PA1 in analog mode; CMP1 only observes
-        // those same pads. Avoid a second GPIO owner or any output transition.
+        #[cfg(feature = "pd-tx-test")]
+        if let PdCommand::GetCaps = command {
+            if streaming && input == 1 && !automatic {
+                let r = receiver.as_mut().unwrap();
+                match crate::pd_tx::get_caps(r).await {
+                    Ok(_) => reply("Get_Source_Capabilities wire completed"),
+                    Err(e) => {
+                        crate::pd_tx::release();
+                        reply(e);
+                    }
+                }
+            } else {
+                reply("CC1 capture required");
+            }
+            continue;
+        }
+        #[cfg(feature = "pd-tx-test")]
+        if crate::pd_tx::attached() {
+            reply("CC1 lease already active");
+            continue;
+        }
+        // The line-ADC task initializes PA0/PA1 analog mode. Passive commands
+        // only observe; the explicit leased probe temporarily delegates PA0.
         let requested = match command {
             PdCommand::Once(i) | PdCommand::Start(i) => i,
             PdCommand::Stop => unreachable!(),
+            #[cfg(feature = "pd-tx-test")]
+            PdCommand::Attach => 1,
+            #[cfg(feature = "pd-tx-test")]
+            PdCommand::GetCaps => unreachable!(),
+            #[cfg(feature = "pd-sink")]
+            PdCommand::Sink(_) => 1,
         };
         automatic = requested == 0;
         input = if automatic {
@@ -490,6 +610,54 @@ pub async fn captures() {
         }
         let r = receiver.as_mut().unwrap();
         match command {
+            #[cfg(feature = "pd-sink")]
+            PdCommand::Sink(volts) => {
+                streaming = false;
+                automatic = false;
+                if !r.start(Input::Cmp1Inp1) {
+                    reply("PD failed to quiesce DMA");
+                    continue;
+                }
+                if let Err(e) = crate::pd_tx::attach() {
+                    reply(e);
+                    continue;
+                }
+                crate::pd_tx::extend_lease();
+                sink_status("starting", u32::from(volts) * 1000);
+                // Keep the existing recovery/stop command responsive while the
+                // stack owns RX/TX. Cancellation releases static DMA/CC controls.
+                match select(
+                    PD.receive(),
+                    embassy_time::with_timeout(
+                        embassy_time::Duration::from_secs(20),
+                        crate::pd_sink::run(r, volts),
+                    ),
+                )
+                .await
+                {
+                    Either::First(_) => reply("PD sink stopped by command"),
+                    Either::Second(_) => reply("PD sink session finished"),
+                }
+                crate::pd_tx::release();
+                r.stop();
+                pd_stats(r);
+                sink_status("detached", 0);
+            }
+            #[cfg(feature = "pd-tx-test")]
+            PdCommand::Attach => {
+                automatic = false;
+                streaming = r.start(Input::Cmp1Inp1);
+                if streaming {
+                    match crate::pd_tx::attach() {
+                        Ok(()) => reply("CC1 attached for 5 seconds"),
+                        Err(e) => reply(e),
+                    }
+                } else {
+                    reply("PD failed to quiesce DMA");
+                }
+            }
+            #[cfg(feature = "pd-tx-test")]
+            PdCommand::GetCaps => unreachable!(),
             PdCommand::Start(_) => {
                 DECODE_ERRORS.store(0, Ordering::Relaxed);
                 SYNC_ERRORS.store(0, Ordering::Relaxed);

@@ -85,7 +85,10 @@ traffic or host stalls. The source can outrun any finite queue; physical loss
 while IRQs cannot run may not be fully detectable from counters. PA0/CMP1_INP1
 has been accepted for the present cable orientation. The other orientation and
 complete analog CC schematic remain separate work. No transmitter, termination
-switching or GoodCRC generation is enabled.
+switching or GoodCRC generation is enabled by this passive mode. Both RX
+orientations and automatic selection were accepted in later line-ADC tests;
+the separate [CC1 sink feature](pd-transmit.md) now supplies active TX and
+software GoodCRC when explicitly commanded.
 
 [Hardware evidence](../hardware/pd-buffered/README.md) distinguishes the initial
 implementations with loss from the accepted build and host-backpressure test.
