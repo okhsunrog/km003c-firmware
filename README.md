@@ -5,7 +5,8 @@ The application starts at `0x4000` and preserves the native bootloader and ICG.
 
 **Display, all four buttons and Embassy USB CDC echo are verified on hardware.**
 The 240×240 ST7789-compatible panel shows an `embedded-graphics` meter UI:
-large voltage, signed current and power, plus temperature and CAL/RAW status.
+large voltage, signed current and power, plus temperature, CAL/RAW status and
+the four D+/D−/CC1/CC2 voltages.
 Button diagnostics are retained in logs/RAM instead of taking screen space.
 Concurrent byte-for-byte USB echo passed for 1, 23, 64, 7, 64, 17, 128, 256 and
 512 bytes, including the new meter image.
@@ -78,6 +79,11 @@ acceptance is still pending. [Latest evidence](hardware/cold-adc/README.md),
 Wide-range current remains untested. Interrupt-rearmed passive PD reception now
 captures complete PPS request/response cycles, including GoodCRC.
 [Buffering and limits](docs/pd-buffered.md) describe bounded queues and counters.
+Both cable orientations and automatic CC selection have now been tested.
+[Line ADC configuration](docs/line-adc.md) and
+[stock/custom samples](hardware/line-adc/README.md) preserve the 2.0.7 reference,
+raw counts and accuracy limits, including an unresolved VDD-estimate difference.
+Short bench command: `uv run tools/bench.py capture-name --pd auto`.
 Both features remain disabled by default.
 
 The [HC32 HAL](https://github.com/okhsunrog/hc32f460-embassy-rs) provides PAC,
@@ -207,7 +213,6 @@ Verify image readback before starting it, and compare loader bytes throughout.
 The first four loader bytes were not readable
 through the acquired dump and are not part of that comparison.
 
-The initial 1672-byte Rust execution test and the complete MCU-pad inventory,
-loader analysis, source links and earlier evidence live in the
-[research
-repository](https://github.com/okhsunrog/km003c-protocol-research/tree/main/docs/firmware).
+The initial 1672-byte Rust execution test, complete MCU-pad inventory,
+loader analysis and original evidence are preserved in
+[hardware and stock-firmware analysis](docs/reverse-engineering/README.md).

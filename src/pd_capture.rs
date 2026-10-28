@@ -43,11 +43,19 @@ fn write32(address: usize, value: u32) {
     unsafe { (address as *mut u32).write_volatile(value) }
 }
 
-/// Logical CMP inputs; deliberately not named CC1/CC2 until board mapping is known.
+/// CMP1_INP1/2 reach CC1/CC2 on the hardware-tested HW2.1 board.
 #[derive(Clone, Copy)]
 pub enum Input {
     Cmp1Inp1,
     Cmp1Inp2,
+}
+impl Input {
+    pub fn number(self) -> u8 {
+        match self {
+            Self::Cmp1Inp1 => 1,
+            Self::Cmp1Inp2 => 2,
+        }
+    }
 }
 #[derive(Debug)]
 pub enum Error {

@@ -99,15 +99,15 @@ fn chrome(display: &mut crate::display::Display, tile: &mut UiTile) {
     .draw(tile)
     .unwrap();
     upload(display, tile, Point::new(12, 8));
-    tile.reset(Size::new(216, 16), Rgb565::BLACK);
+    tile.reset(Size::new(216, 10), Rgb565::BLACK);
     Text::new(
-        "Hold EXIT: loader",
-        Point::new(0, 10),
+        "EXIT 2s: loader",
+        Point::new(0, 8),
         MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE),
     )
     .draw(tile)
     .unwrap();
-    upload(display, tile, Point::new(12, 220));
+    upload(display, tile, Point::new(12, 228));
 }
 
 #[embassy_executor::task]
@@ -143,6 +143,10 @@ pub async fn task() {
     let (mut previous, mut stable, mut repeats) = (0u8, 0u8, 0u8);
     let (mut lit, mut held_exit) = (false, 0);
     let mut caches: [Option<Value>; 5] = core::array::from_fn(|_| None);
+    #[cfg(feature = "measurement")]
+    let mut line_caches: [Option<Value>; 4] = core::array::from_fn(|_| None);
+    #[cfg(feature = "measurement")]
+    let mut lines_due = embassy_time::Instant::now();
     unsafe {
         for i in 0..8 {
             (0x200f0d20 as *mut u32).add(i).write_volatile(0);
@@ -160,6 +164,8 @@ pub async fn task() {
                 // when a debounced quarter-turn changes the complete layout.
                 display.clear(Rgb565::BLACK).unwrap();
                 caches.fill(None);
+                #[cfg(feature = "measurement")]
+                line_caches.fill(None);
                 chrome(&mut display, &mut tile);
                 log::info!("Orientation quarter-turn={rotation}");
             }
@@ -265,15 +271,20 @@ pub async fn task() {
             Rgb565::YELLOW,
         );
         if caches[3].as_ref() != Some(&values[3]) {
-            tile.reset(Size::new(216, 24), Rgb565::BLACK);
+            tile.reset(Size::new(144, 18), Rgb565::BLACK);
+            let mut header = Value::new();
+            #[cfg(feature = "measurement")]
+            write!(header, "RUST {}", values[3]).unwrap();
+            #[cfg(not(feature = "measurement"))]
+            header.push_str("KM003C / Rust").unwrap();
             Text::new(
-                &values[3],
-                Point::new(0, 18),
-                MonoTextStyle::new(&FONT_10X20, Rgb565::WHITE),
+                &header,
+                Point::new(0, 10),
+                MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE),
             )
             .draw(&mut tile)
             .unwrap();
-            upload(&mut display, &tile, Point::new(12, 184));
+            upload(&mut display, &tile, Point::new(12, 8));
             caches[3] = Some(values[3].clone());
         }
         if caches[4].as_ref() != Some(&values[4]) {
@@ -287,6 +298,38 @@ pub async fn task() {
             .unwrap();
             upload(&mut display, &tile, Point::new(164, 8));
             caches[4] = Some(values[4].clone());
+        }
+        #[cfg(feature = "measurement")]
+        if embassy_time::Instant::now() >= lines_due {
+            let sample = crate::lines::snapshot();
+            for (i, name) in ["CC1", "CC2", "D+ ", "D- "].into_iter().enumerate() {
+                let mut text = Value::new();
+                if let Some(s) = sample {
+                    let mv = s.uv[i] / 1000;
+                    write!(text, "{name} {}.{:03}", mv / 1000, mv % 1000).unwrap();
+                } else {
+                    write!(text, "{name} --").unwrap();
+                }
+                if line_caches[i].as_ref() != Some(&text) {
+                    // Four useful measurements in a two-column footer. Each
+                    // changed value is still one contiguous panel transaction.
+                    tile.reset(Size::new(108, 20), Rgb565::BLACK);
+                    Text::new(
+                        &text,
+                        Point::new(0, 16),
+                        MonoTextStyle::new(&FONT_10X20, Rgb565::WHITE),
+                    )
+                    .draw(&mut tile)
+                    .unwrap();
+                    upload(
+                        &mut display,
+                        &tile,
+                        Point::new(12 + (i as i32 % 2) * 108, 181 + (i as i32 / 2) * 22),
+                    );
+                    line_caches[i] = Some(text);
+                }
+            }
+            lines_due = embassy_time::Instant::now() + embassy_time::Duration::from_millis(250);
         }
         if !lit {
             aw.backlight(30).await.unwrap();

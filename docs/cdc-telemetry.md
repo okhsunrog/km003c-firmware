@@ -16,16 +16,17 @@ image and `tools/usb_echo.py` remain available for USB transport regression test
 | Command | Result |
 | --- | --- |
 | `status` | Reply with `km003c-cdc-v1`, also used for host resynchronization |
-| `stream on` | ADC records every 250 ms |
+| `stream on` | INA229 and line-voltage records every 250 ms |
 | `stream off` | Stop ADC records |
 | `pd start 1` / `pd start 2` | Continuous interrupt-rearmed receive |
+| `pd start auto` | Continuous receive, ADC-driven CC selection |
 | `pd stop` | Stop continuous receive and publish counters |
 | `pd 1` | One passive burst from CMP1_INP1 / PA0 |
 | `pd 2` | One passive burst from CMP1_INP2 / PA1 |
 | `loader` | Request native DFU and reset |
 
-PD commands require `pd-capture`. Input numbers do not assign physical CC1/CC2
-connector names. Inputs become analog with outputs and pull-ups disabled. TX
+PD commands require `pd-capture`. On the tested HW2.1, inputs 1/2 correspond to
+CC1/CC2 on PA0/PA1. Inputs become analog with outputs and pull-ups disabled. TX
 outputs, VCOUT, CC termination and GoodCRC generation remain disabled. DAC code
 `0x20` follows the native configuration. Only a command starts acquisition.
 
@@ -33,6 +34,12 @@ ADC records contain `seq`, device uptime `ms`, `uv`, signed `ua` (or null),
 `mc`, `cal`, `diag` and cumulative `dropped`. Units are µV, µA and milli-Celsius;
 `cal` indicates valid factory correction. These are the same snapshots as the
 meter screen. Host USB stalls do not suspend measurement/UI tasks.
+
+`lines` records carry `cc1_uv`, `cc2_uv`, `dp_uv`, `dm_uv`, `vdd_uv`, `raw`
+(`[DR0,DR1,DR2,DR3,DR16]`), `cc_input` (0 ambiguous/unavailable, 1 or 2), `seq`
+and `ms`. The line scale follows stock 2.0.7, independently of INA229 `cal`.
+An unavailable conversion reports `line ADC unavailable`. See
+[line acquisition, scale and automatic selection](line-adc.md).
 
 A bounded eight-line queue serializes records. Measurement records are dropped
 rather than blocking if it fills. Each line transfer has a timeout. A newline
@@ -55,6 +62,7 @@ about 12.75 µs after the last edge at the configured 12 MHz timer clock.
 - `pd_summary`: captured count, valid events and decode errors.
 - `pd_capture_error`: timeout, DMA error, full buffer or count mismatch.
 - `pd_registers`: post-cancellation snapshot in the order below.
+- `pd_input`: selected comparator input, including automatic switches.
 
 Legacy `pd_packet.ms` is processing uptime, **not a hardware wire timestamp**.
 Buffered builds use `end_us`, IRQ-observed end uptime with 1 ms resolution.
@@ -78,11 +86,19 @@ claim losslessness under arbitrary traffic, IRQ masking or host backpressure.
 ## Host recording
 
 ```sh
-uv run tools/usb_telemetry.py --seconds 40 --pd 1 --repeat-pd \
-  --output capture.ndjson
+uv run tools/bench.py my-capture --pd auto
 ```
 
+The bench wrapper defaults to a 30-second recording, discovers libusb (including
+NixOS store paths), and stores NDJSON under
+`~/tmp_zfs/codex_tmp/km003c-rust-bringup/bench/`. Override with
+`LIBUSB_LIBRARY` and `KM003C_BENCH_ROOT`. `--pd` implies continuous capture;
+`--seconds`, `--pause-read`, `--loader` and `--dry-run` are available. No flash
+write is hidden in this helper. The lower-level `usb_telemetry.py` still accepts
+explicit paths and single-burst options.
+
 `--pd-continuous --pd 1` starts buffered capture and stops it after recording.
+`--pd-continuous --pd auto` uses automatic selection.
 `--pause-read 10` deliberately delays host reads for a backpressure check.
 `--repeat-pd` repeats the selected burst command every 16 seconds. `--loader`
 returns to native DFU after recording. Supply `--libusb PATH` if the system

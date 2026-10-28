@@ -1,0 +1,50 @@
+{
+  "stock": "/home/okhsunrog/code/km003c-firmware/hardware/line-adc/stock-flipped.csv",
+  "capture": "hardware/line-adc/custom-auto-switch.ndjson",
+  "input": 2,
+  "stock_samples": 40,
+  "custom_samples": 101,
+  "units": "mV",
+  "fields": {
+    "cc1": {
+      "stock_mean": 0.0,
+      "custom_mean": 0.0,
+      "delta": 0.0,
+      "custom_min": 0.0,
+      "custom_max": 0.0,
+      "custom_stddev": 0.0
+    },
+    "cc2": {
+      "stock_mean": 1653.595,
+      "custom_mean": 1651.7868217821783,
+      "delta": -1.8081782178217054,
+      "custom_min": 1647.429,
+      "custom_max": 1656.874,
+      "custom_stddev": 2.1587844232484565
+    },
+    "dp": {
+      "stock_mean": 596.3925,
+      "custom_mean": 594.4837227722772,
+      "delta": -1.9087772277227941,
+      "custom_min": 592.812,
+      "custom_max": 596.087,
+      "custom_stddev": 0.6736490568965872
+    },
+    "dm": {
+      "stock_mean": 0.0,
+      "custom_mean": 0.0,
+      "delta": 0.0,
+      "custom_min": 0.0,
+      "custom_max": 0.0,
+      "custom_stddev": 0.0
+    },
+    "vdd": {
+      "stock_mean": 3293.3725,
+      "custom_mean": 3354.6445346534656,
+      "delta": 61.27203465346565,
+      "custom_min": 3353.813,
+      "custom_max": 3356.358,
+      "custom_stddev": 1.1936522999415091
+    }
+  }
+}

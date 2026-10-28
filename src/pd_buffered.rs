@@ -24,6 +24,7 @@ static ENABLED: AtomicBool = AtomicBool::new(false);
 static WAKER: AtomicWaker = AtomicWaker::new();
 #[derive(Clone, Copy, Default)]
 pub struct Meta {
+    pub input: u8,
     pub count: usize,
     pub error: u8,
     pub sequence: u32,
@@ -31,6 +32,8 @@ pub struct Meta {
 }
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Stats {
+    pub input_switches: u32,
+    pub switch_discards: u32,
     pub frames: u32,
     pub overruns: u32,
     pub held_overruns: u32,
@@ -43,6 +46,7 @@ pub struct Stats {
 }
 #[derive(Default)]
 struct State {
+    input: u8,
     pool: Pool,
     meta: [Meta; 2],
     stats: Stats,
@@ -147,6 +151,7 @@ pub fn on_interrupt(kind: u8) {
             return;
         }
         let meta = Meta {
+            input: s.input,
             count,
             error,
             sequence: s.stats.frames,
@@ -179,6 +184,14 @@ impl Buffered {
         Self { receiver }
     }
     pub fn start(&mut self, input: Input) -> bool {
+        self.restart(input, true)
+    }
+    /// Reselect a passive input without resetting cumulative loss counters.
+    /// Any old queued/partial burst is discarded explicitly, never mislabeled.
+    pub fn switch_input(&mut self, input: Input) -> bool {
+        self.restart(input, false)
+    }
+    fn restart(&mut self, input: Input, reset_stats: bool) -> bool {
         if !self.stop() {
             return false;
         }
@@ -187,11 +200,22 @@ impl Buffered {
         w(0xe000edfc, r(0xe000edfc) | (1 << 24));
         w(0xe0001000, r(0xe0001000) | 1);
         STATE.lock(|cell| {
+            let mut state = cell.borrow_mut();
+            let mut stats = Stats::default();
+            if !reset_stats && let Some(old) = state.as_ref() {
+                stats = old.stats;
+                stats.input_switches = stats.input_switches.wrapping_add(1);
+                stats.switch_discards = stats.switch_discards.wrapping_add(
+                    u32::from(old.pool.ready()) + u32::from((r(0x400530e8) >> 16) < N as u32),
+                );
+            }
             let s = State {
+                input: input.number(),
+                stats,
                 running: true,
                 ..State::default()
             };
-            *cell.borrow_mut() = Some(s);
+            *state = Some(s);
             ENABLED.store(true, Ordering::Release);
             arm(0);
         });

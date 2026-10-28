@@ -56,6 +56,7 @@ must not delay packet-gap IRQs for the duration of an entire USB log message.
 ## Commands and diagnostics
 
 - `pd start 1` / `pd start 2`: continuous passive receive on CMP input 1/2.
+- `pd start auto`: use the [line ADC](line-adc.md) to follow the active CC.
 - `pd stop`: stop acquisition and report counters.
 - `pd 1` / `pd 2`: retain the older single-burst/raw diagnostic interface.
 

@@ -54,8 +54,12 @@ fn command(text: &str) {
             }
         }
         #[cfg(feature = "pd-capture")]
-        "pd start 1" | "pd start 2" => {
-            let input = if text.trim() == "pd start 1" { 1 } else { 2 };
+        "pd start 1" | "pd start 2" | "pd start auto" => {
+            let input = match text.trim() {
+                "pd start 1" => 1,
+                "pd start 2" => 2,
+                _ => 0,
+            };
             if PD.try_send(PdCommand::Start(input)).is_err() {
                 reply("PD busy");
             } else {
@@ -173,6 +177,14 @@ pub async fn measurements() {
             )
             .unwrap();
             emit(line);
+            if let Some(sample) = crate::lines::snapshot() {
+                let mut line = Line::new();
+                writeln!(line, "{{\"type\":\"lines\",\"seq\":{sequence},\"ms\":{},\"cc1_uv\":{},\"cc2_uv\":{},\"dp_uv\":{},\"dm_uv\":{},\"vdd_uv\":{},\"raw\":{:?},\"cc_input\":{}}}",
+                    embassy_time::Instant::now().as_millis(), sample.uv[0], sample.uv[1], sample.uv[2], sample.uv[3], sample.vdd_uv, sample.raw, crate::lines::cc_input().unwrap_or(0)).unwrap();
+                emit(line);
+            } else {
+                reply("line ADC unavailable");
+            }
             #[cfg(feature = "orientation")]
             crate::orientation::emit();
             sequence = sequence.wrapping_add(1);
@@ -210,6 +222,9 @@ pub fn start_capture_task() {
 #[cfg(feature = "pd-capture")]
 #[derive(Clone, Copy)]
 enum PdReport {
+    Input {
+        input: u8,
+    },
     Event {
         event: km003c_drivers::pd::Event,
         burst: u32,
@@ -301,6 +316,9 @@ pub async fn pd_reports() {
         let record = REPORTS.receive().await;
         let mut line = Line::new();
         match record {
+            PdReport::Input { input } => {
+                writeln!(line, "{{\"type\":\"pd_input\",\"input\":{input}}}").unwrap();
+            }
             PdReport::Event {
                 event,
                 burst,
@@ -337,7 +355,7 @@ pub async fn pd_reports() {
                 errors,
                 sync,
             } => {
-                writeln!(line,"{{\"type\":\"pd_stats\",\"frames\":{},\"overruns\":{},\"held_overruns\":{},\"noise\":{},\"full\":{},\"dma_errors\":{},\"mismatches\":{},\"stop_faults\":{},\"max_handler_cycles\":{},\"decode_errors\":{errors},\"sync_errors\":{sync}}}",s.frames,s.overruns,s.held_overruns,s.noise,s.full,s.dma_errors,s.mismatches,s.stop_faults,s.max_handler_cycles).unwrap();
+                writeln!(line,"{{\"type\":\"pd_stats\",\"frames\":{},\"overruns\":{},\"held_overruns\":{},\"noise\":{},\"full\":{},\"dma_errors\":{},\"mismatches\":{},\"stop_faults\":{},\"input_switches\":{},\"switch_discards\":{},\"max_handler_cycles\":{},\"decode_errors\":{errors},\"sync_errors\":{sync}}}",s.frames,s.overruns,s.held_overruns,s.noise,s.full,s.dma_errors,s.mismatches,s.stop_faults,s.input_switches,s.switch_discards,s.max_handler_cycles).unwrap();
             }
             PdReport::FrameError { burst, code, count } => {
                 writeln!(line,"{{\"type\":\"pd_frame_error\",\"burst\":{burst},\"code\":{code},\"count\":{count}}}").unwrap();
@@ -354,8 +372,9 @@ pub async fn captures() {
         pd_capture::{Input, Receiver},
     };
     use embassy_futures::select::{Either, select};
-    let (mut receiver, mut pins) = (None, None);
+    let mut receiver = None;
     let mut streaming = false;
+    let mut automatic = false;
     let mut input = 1;
     let mut once = [0u16; 860];
     let mut once_sequence = 0u32;
@@ -365,7 +384,10 @@ pub async fn captures() {
             let r: &Buffered = receiver.as_ref().unwrap();
             match select(
                 PD.receive(),
-                embassy_time::with_timeout(embassy_time::Duration::from_secs(1), r.wait_ready()),
+                embassy_time::with_timeout(
+                    embassy_time::Duration::from_millis(if automatic { 20 } else { 1000 }),
+                    r.wait_ready(),
+                ),
             )
             .await
             {
@@ -384,7 +406,7 @@ pub async fn captures() {
                     };
                     if let Some(m) = meta {
                         if m.error == 0 {
-                            decode_pd(&once[..m.count], m.sequence, input, m.end_us, false);
+                            decode_pd(&once[..m.count], m.sequence, m.input, m.end_us, false);
                         } else {
                             report(PdReport::FrameError {
                                 burst: m.sequence,
@@ -396,6 +418,24 @@ pub async fn captures() {
                     if r.faulted() {
                         streaming = false;
                         reply("PD stopped on DMA quiescence fault");
+                    }
+                    if automatic
+                        && streaming
+                        && let Some(next) = crate::lines::cc_input()
+                        && next != input
+                    {
+                        let selected = if next == 1 {
+                            Input::Cmp1Inp1
+                        } else {
+                            Input::Cmp1Inp2
+                        };
+                        streaming = r.switch_input(selected);
+                        if streaming {
+                            input = next;
+                            report(PdReport::Input { input });
+                        } else {
+                            reply("PD stopped on input switch fault");
+                        }
                     }
                     if !streaming || embassy_time::Instant::now() >= stats_due {
                         pd_stats(r);
@@ -420,17 +460,17 @@ pub async fn captures() {
             reply("PD stopped");
             continue;
         }
-        if pins.is_none() {
-            pins = Some(unsafe {
-                [
-                    embassy_hc32::gpio::AnalogPin::new(embassy_hc32::gpio::Port::A, 0),
-                    embassy_hc32::gpio::AnalogPin::new(embassy_hc32::gpio::Port::A, 1),
-                ]
-            });
-        }
-        input = match command {
+        // The line-ADC task owns PA0/PA1 in analog mode; CMP1 only observes
+        // those same pads. Avoid a second GPIO owner or any output transition.
+        let requested = match command {
             PdCommand::Once(i) | PdCommand::Start(i) => i,
             PdCommand::Stop => unreachable!(),
+        };
+        automatic = requested == 0;
+        input = if automatic {
+            crate::lines::cc_input().unwrap_or(input)
+        } else {
+            requested
         };
         let selected = if input == 1 {
             Input::Cmp1Inp1
@@ -454,6 +494,7 @@ pub async fn captures() {
                 DECODE_ERRORS.store(0, Ordering::Relaxed);
                 SYNC_ERRORS.store(0, Ordering::Relaxed);
                 streaming = r.start(selected);
+                report(PdReport::Input { input });
                 reply(if streaming {
                     "PD continuous started"
                 } else {

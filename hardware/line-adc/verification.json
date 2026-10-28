@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-28",
+  "hardware": "KM003C HW2.1",
+  "stock_version": "2.0.7",
+  "tested_application_sha256": "6680b8db77a77eec9986bff088b037babca9e06f9f6172023ae29a2386c6228a",
+  "bootloader_sha256": "17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf",
+  "stock_application_sha256": "c63057eaf08b8625e7ac2fc7270c06d75515e78fdbdd46080bdf4b696984ec67",
+  "features": [
+    "cdc-telemetry",
+    "pd-capture",
+    "orientation",
+    "manual-ui-test"
+  ],
+  "stock_samples_per_orientation": 40,
+  "custom_voltage_fields_visible": true,
+  "input_sequence": [
+    1,
+    2,
+    1
+  ],
+  "pd_crc_valid_by_input": {
+    "1": 24,
+    "2": 24
+  },
+  "final_pd_stats": {
+    "type": "pd_stats",
+    "frames": 376,
+    "overruns": 0,
+    "held_overruns": 0,
+    "noise": 328,
+    "full": 0,
+    "dma_errors": 0,
+    "mismatches": 0,
+    "stop_faults": 0,
+    "input_switches": 2,
+    "switch_discards": 0,
+    "max_handler_cycles": 730,
+    "decode_errors": 0,
+    "sync_errors": 34
+  },
+  "cdc_dropped_start": 3,
+  "cdc_dropped_end": 3,
+  "custom_application_flash_writes": 1,
+  "application_readback_matches": true,
+  "bootloader_unchanged": true,
+  "explicit_loader_return_verified": true,
+  "same_installed_image_restart_verified": true,
+  "stock_restored_after_test": false,
+  "limitations": [
+    "Only zero-level D- reference",
+    "No external metrology reference",
+    "VDD estimate differs from stock by 61..63 mV",
+    "Feature-guard cleanup changes three diagnostic source-line bytes; not reflashed"
+  ]
+}

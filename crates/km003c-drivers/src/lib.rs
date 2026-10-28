@@ -9,4 +9,5 @@ pub mod tile;
 pub mod rotation;
 pub mod sc7a20;
 
+pub mod lines;
 pub mod pd_pool;

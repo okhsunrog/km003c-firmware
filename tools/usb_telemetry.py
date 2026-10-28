@@ -10,11 +10,11 @@ complete JSON records. Invalid fragments are counted and reported on stderr.
 """
 
 import argparse
-from contextlib import contextmanager
 import json
-from pathlib import Path
 import sys
 import time
+from contextlib import contextmanager
+from pathlib import Path
 
 import usb.backend.libusb1
 import usb.core
@@ -75,7 +75,9 @@ def main() -> None:
     parser.add_argument("--seconds", type=float, default=20)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
-        "--pd", type=int, choices=[1, 2], help="Single passive capture on CMP input 1/2"
+        "--pd",
+        choices=["1", "2", "auto"],
+        help="CMP input 1/2, or auto with --pd-continuous",
     )
     parser.add_argument(
         "--loader", action="store_true", help="Return to native loader after recording"
@@ -99,6 +101,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.pd_continuous and not args.pd:
         parser.error("--pd-continuous requires --pd")
+    if args.pd == "auto" and not args.pd_continuous:
+        parser.error("--pd auto requires --pd-continuous")
     counts: dict[str, int] = {}
     invalid = 0
     with connect(args.libusb, args.wait) as device, args.output.open("w") as output:

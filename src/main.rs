@@ -7,6 +7,8 @@ use cortex_m_rt::{entry, exception};
 mod aw9523;
 mod display;
 #[cfg(feature = "measurement")]
+mod lines;
+#[cfg(feature = "measurement")]
 pub mod measurement;
 #[cfg(feature = "orientation")]
 mod orientation;
@@ -142,7 +144,10 @@ fn main() -> ! {
         s.spawn(usb_task().unwrap());
         s.spawn(ui::task().unwrap());
         #[cfg(feature = "measurement")]
-        s.spawn(measurement::task().unwrap());
+        {
+            s.spawn(measurement::task().unwrap());
+            s.spawn(lines::task().unwrap());
+        }
         #[cfg(feature = "cdc-telemetry")]
         s.spawn(telemetry::measurements().unwrap());
         #[cfg(all(feature = "cdc-telemetry", feature = "pd-capture"))]

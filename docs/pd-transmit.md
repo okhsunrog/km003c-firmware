@@ -33,6 +33,37 @@ used to interpret a different firmware build. They are not functions called by
 the custom Rust image. Encoding, TX completion/EOP/idle handling and RX turnaround
 still require implementation and physical acceptance in Rust.
 
+## Board controls recovered from the catalog code
+
+The following control-flow evidence is from 1.9.9; it is auxiliary until remapped
+and checked against 2.0.7. Passive CC wiring and voltages are now independently
+[hardware-tested](line-adc.md), but this does not establish the TX circuit.
+
+| Control | Observed native use |
+| --- | --- |
+| PA0 / PA1 | CMP1_INP1/2 in RX; TimerA2 AF4 output 1/2 in TX (`0x435ae`) |
+| PC14 / PC15 | Output latch, output-enable and internal pull-up change with CC mode; not merely a TX-enable pair |
+| PB6 | Cleared by `0x435de`; set in mode 1/3 by `0x43610` |
+| AW9523 P0_3 | High, low or high-impedance via mask `0x08` and `0x1a9c8` |
+| AW9523 P1_6 | Output-latch bit changed via mask `0x40` and `0x1aa56`; that helper does not set direction |
+
+`0x1a9c8(mask,state)` manipulates AW9523 OUTPUT0/CONFIG0: state 0 sets the
+direction bit (input/high-impedance); state 1 sets the latch then enables output;
+other states clear the latch then enable output. `0x1aa56(mask,state)` changes
+OUTPUT1 only. Both call the I2C helper for address `0x5b`.
+
+`0x43610` combines PB6 and P0_3: mode 0 clears PB6 and releases P0_3, mode 1 sets
+PB6, mode 2 pulls P0_3 low, mode 3 does both. `0x4343c` drives the selected
+PC14/PC15 low, `0x4346a` high, and `0x43416` disables its output. `0x434b6` also
+changes the opposite pin's pull-up and expander outputs depending on selected
+CC. These routines establish software states, not resistor values or a full
+schematic. In the GPIO PCR, POUTE is bit 1, PUU bit 6 and DDIS bit 15; confusing
+these would misidentify the role of the switching sequence.
+
+Continuity/net tracing and controlled electrical measurements are still needed
+to distinguish terminations, mux/driver enables and the external BMC analog
+stage. The custom passive implementation does not actuate these controls.
+
 ## What auto-GoodCRC means
 
 Published `usbpd-traits` 2.0.0 has `Driver::HAS_AUTO_GOOD_CRC`, default false.

@@ -5,8 +5,9 @@ confirmed on HW2.1 alongside USB/display operation. Two 90-second runs produced
 720 samples without SPI errors. [Evidence](../hardware/adc-207/README.md) records
 stock 2.0.7 comparisons and restoration. Passive PD on PA0 now captures
 complete PPS request/response cycles using
-interrupt-rearmed double buffering. The other cable orientation remains
-unverified. See [buffered reception](pd-buffered.md).
+interrupt-rearmed double buffering. Both cable orientations and ADC-driven
+automatic input selection are now verified. Internal ADC1 also measures D+/D−
+and CC1/CC2. See [line ADC](line-adc.md) and [buffered reception](pd-buffered.md).
 
 ## Measurement
 
@@ -91,7 +92,8 @@ One ADC interaction in the native PD transmitter is now more precise:
 `0x52e4` changes `0x400400a0` bit 0, which the SDK identifies as
 `ADC1.AWDCR.AWDEN` (analog watchdog enable). TX disables it and later enables it.
 That identifies the register operation; the reason and monitored signal are
-still unresolved. The passive receive implementation does not change ADC1.
+still unresolved. Passive edge reception does not use the ADC watchdog; the
+separate line-voltage task explicitly owns and configures ADC1.
 
 ## Passive PD
 
