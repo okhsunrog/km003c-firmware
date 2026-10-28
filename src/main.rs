@@ -4,7 +4,10 @@
 use core::{panic::PanicInfo, ptr::write_volatile};
 use cortex_m_rt::{entry, exception};
 
+mod aw9523;
+mod display;
 mod retention_log;
+mod ui;
 mod usb;
 const MARKER: *mut u32 = 0x200f_0fc0 as *mut u32;
 const BOOT_REQUEST: *mut u32 = 0x200f_0ff0 as *mut u32;
@@ -17,7 +20,7 @@ const fn metadata() -> [u8; 64] {
         data[i] = 0xff;
         i += 1;
     }
-    let fields: [&[u8]; 3] = [b"KM003C", b"rust-usb", b"2026.10.28"];
+    let fields: [&[u8]; 3] = [b"KM003C", b"rust-ui", b"2026.10.28"];
     let mut field = 0;
     while field < 3 {
         i = 0;
@@ -82,7 +85,7 @@ fn main() -> ! {
         write_volatile(MARKER.add(1), 1);
         write_volatile(MARKER.add(2), 0x0000_4000);
     }
-    let mut cp = cortex_m::Peripherals::take().unwrap();
+    let cp = cortex_m::Peripherals::take().unwrap();
     use embassy_hc32::clocks::{self, Config, Divider, Dividers, Mpll};
     unsafe {
         write_volatile(0x40050804 as *mut u32, 0x77);
@@ -107,12 +110,7 @@ fn main() -> ! {
         .unwrap()
     };
     let hclk = clocks.hclk;
-    cp.SYST
-        .set_clock_source(cortex_m::peripheral::syst::SystClkSource::Core);
-    cp.SYST.set_reload(hclk / 1000 - 1);
-    cp.SYST.clear_current();
-    cp.SYST.enable_interrupt();
-    cp.SYST.enable_counter();
+    embassy_hc32::time_driver::init(cp.SYST, hclk).unwrap();
     static EXECUTOR: static_cell::StaticCell<embassy_executor::Executor> =
         static_cell::StaticCell::new();
     unsafe {
@@ -120,13 +118,15 @@ fn main() -> ! {
     }
     EXECUTOR.init(embassy_executor::Executor::new()).run(|s| {
         s.spawn(usb_task().unwrap());
+        s.spawn(ui::task().unwrap());
     })
 }
 
 #[exception]
 fn SysTick() {
+    embassy_hc32::time_driver::systick_tick();
     static TICKS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-    if TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed) >= 20_000 {
+    if TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed) >= 90_000 {
         unsafe {
             for (i, address) in [
                 0x400c0008usize,

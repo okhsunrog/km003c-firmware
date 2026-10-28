@@ -3,15 +3,41 @@
 Rust 2024 firmware for ChargerLAB POWER-Z KM003C HW2.1 (HC32F460JETA).
 The application starts at `0x4000` and preserves the native bootloader and ICG.
 
-**Embassy USB CDC echo is verified on the device.** Linux enumerates it as
-`KM003C Rust USB test`; byte-for-byte echo passed for 1, 23, 64, 7, 64, 17,
-128, 256 and 512 bytes. The application automatically returns to native DFU
-about 20 seconds after startup. It is an experimental bring-up image, rather
-than an interactive replacement for the meter UI.
+**Display, all four buttons and Embassy USB CDC echo are verified on hardware.**
+The 240×240 ST7789-compatible panel shows an `embedded-graphics` diagnostic UI.
+Button rows highlight and count presses; concurrent byte-for-byte USB echo
+passed for 1, 23, 64, 7, 64, 17, 128, 256 and 512 bytes.
+The image returns to native DFU about 90 seconds after startup. Holding Exit
+for two seconds also requests DFU; this second path has not been separately tested.
 
 The tested device was restored to its exact original 1.9.9 application after
 experiments. Full application readback and unchanged bootloader bytes were
-checked. [Hardware evidence](hardware/usb-cdc/README.md) records the final run.
+checked. [Display/button evidence](hardware/display-buttons/README.md) records
+the current run; [USB evidence](hardware/usb-cdc/README.md) preserves earlier tests.
+
+## Display and buttons
+
+The panel shares QSPI with external flash. The Rust transport uses PB14 SCK,
+PB13 MOSI, PB10 D/C and PB15 panel CS. It temporarily deselects flash through
+PB1 GPIO/pull-up, verifies that CS is high and restores its AF7 configuration
+after each transaction. No other task or DMA may access mapped flash meanwhile.
+
+AW9523B at I2C `0x5b` provides panel reset through P1_1 and backlight dimming
+through registers `0x22` / `0x23`. Its hardware ID `0x23` was read successfully.
+I2C3 uses PC13 SDA (AF48), PH2 SCL (AF49), 100 kHz and interrupt-driven HAL I/O.
+Read-modify-write operations preserve unrelated expander outputs.
+
+| Button | MCU pin | Active level |
+| --- | --- | --- |
+| Exit | PB7 | Low |
+| OK | PB11 | Low |
+| Left | PB8 | Low |
+| Right / lightning | PB9 | Low |
+
+Inputs have pull-ups and are sampled every 20 ms with repeated-sample debounce.
+The UI draws only when inputs change and uses no heap. Retention RAM contains
+the debounced mask at `0x200f0d20` and four press counters at `0x200f0d24` onward.
+The lightning-marked button's electrical CC behavior is not established by this UI test.
 
 ## USB implementation
 
@@ -40,8 +66,7 @@ The port explicitly configures:
 
 USB enumeration and echo work with the interrupt-driven async path. There is
 no busy polling, SDK C driver, local driver fork or alternate USB stack in the
-final image. The display, sensors, measurement circuits and PD logic are not
-initialized. VBUS detection is disabled for the HID-port-powered test setup;
+final image. Sensors, measurement circuits and PD logic are not initialized. VBUS detection is disabled for the HID-port-powered test setup;
 self-powered operation and general disconnect/reconnect acceptance remain open.
 
 ## Build and package
@@ -85,7 +110,7 @@ and attempts to restore it when finished. No serial kernel driver is required.
 The payloads and eight-packet queue are intended for these bounded bring-up
 checks, not unrestricted buffering or sustained-throughput acceptance.
 
-SysTick currently owns the reset deadline; the Embassy time driver is disabled.
+SysTick advances the HAL Embassy time driver and the independent reset deadline.
 The deadline cannot recover a hang that permanently masks interrupts.
 
 ## Retention diagnostics
@@ -97,9 +122,8 @@ It survives a software reset; complete power loss need not preserve it.
 The panic handler formats a bounded, zero-terminated 256-byte message at
 `0x200f0e00`, records the source line at `0x200f0fd0` and a zero-padded 24-byte
 file prefix at `0x200f0fd4`, then requests native DFU and resets. Interrupts are
-masked while recording panic/reset state. The location record was verified on
-hardware; the later full-message formatting extension has not been separately
-triggered in a hardware panic test.
+masked while recording panic/reset state. Both the source location and formatted message were verified on hardware when
+the flash-CS guard triggered during display bring-up.
 
 The status at `0x200f0fcc` distinguishes panic (`0xbad00002`), HardFault
 (`0xbad00001`) and normal USB-test timeout (`0x600d0002`). On normal timeout,

@@ -1,0 +1,10 @@
+echo matched 1
+echo matched 23
+echo matched 64
+echo matched 7
+echo matched 64
+echo matched 17
+echo matched 128
+echo matched 256
+echo matched 512
+PASS: CDC echo

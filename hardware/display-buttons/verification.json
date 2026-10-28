@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-28",
+  "device": "KM003C HW2.1",
+  "aw9523b": {
+    "address": "0x5b",
+    "id": "0x23"
+  },
+  "display": {
+    "compatible_controller": "ST7789",
+    "width": 240,
+    "height": 240,
+    "owner_confirmed_visible": true
+  },
+  "buttons": {
+    "owner_confirmed_all_four": true,
+    "released_mask": 0,
+    "press_counts": {
+      "Exit": 5,
+      "OK": 6,
+      "Left": 6,
+      "Right": 8
+    }
+  },
+  "normal_timeout_return_to_dfu": true,
+  "stock_restore": {
+    "version": "1.9.9",
+    "full_readback_bytes": 453828
+  },
+  "bootloader_range": "[0x4,0x4000)",
+  "bootloader_sha256": "17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf"
+}
