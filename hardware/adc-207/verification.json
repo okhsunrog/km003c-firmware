@@ -1,0 +1,118 @@
+{
+  "device": "KM003C HW2.1",
+  "date": "2026-10-28",
+  "firmware_before_and_after": "2.0.7 / 2026.9.29",
+  "runs": [
+    {
+      "name": "probe",
+      "samples": 360,
+      "status": 3,
+      "manufacturer_id": "0x5449",
+      "device_id": "0x2291",
+      "configuration": [
+        "0x170",
+        "0xfdb0",
+        "0x1062",
+        "0x1e"
+      ],
+      "bus_volts_last": 4.8818359375,
+      "bus_volts_min": 4.8626953125000005,
+      "bus_volts_max": 4.8833984375,
+      "current_counts_last": -58505,
+      "current_counts_min": -63171,
+      "current_counts_max": -58423,
+      "uncalibrated_amps_last": -0.9360799999999999,
+      "uncalibrated_amps_min": -1.0107359999999999,
+      "uncalibrated_amps_max": -0.9347679999999999,
+      "temperature_celsius_last": 34.2734375,
+      "diagnostic_last": "0x1",
+      "image_sha256": "a9ceddce480bcb48ab03b2c2a461f8147c0fd426a047fb9f1610b949c6861cb2",
+      "image_bytes": 96624,
+      "bootloader_unchanged": true,
+      "usb_echo_sizes": [
+        1,
+        23,
+        64,
+        7,
+        64,
+        17,
+        128,
+        256,
+        512
+      ]
+    },
+    {
+      "name": "units",
+      "samples": 360,
+      "status": 3,
+      "manufacturer_id": "0x5449",
+      "device_id": "0x2291",
+      "configuration": [
+        "0x170",
+        "0xfdb0",
+        "0x1062",
+        "0x1e"
+      ],
+      "bus_volts_last": 4.9021484375,
+      "bus_volts_min": 4.8943359375,
+      "bus_volts_max": 4.9833984375,
+      "current_counts_last": -44079,
+      "current_counts_min": -46028,
+      "current_counts_max": -5776,
+      "uncalibrated_amps_last": -0.705264,
+      "uncalibrated_amps_min": -0.736448,
+      "uncalibrated_amps_max": -0.092416,
+      "temperature_celsius_last": 33.2890625,
+      "diagnostic_last": "0x3",
+      "image_sha256": "8e3dae0f629edadf15efa11ebe9d723b408b9d2ef6c92c2f48e60e0e5858ba2a",
+      "image_bytes": 97600,
+      "bootloader_unchanged": true,
+      "usb_echo_sizes": [
+        1,
+        23,
+        64,
+        7,
+        64,
+        17,
+        128,
+        256,
+        512
+      ]
+    }
+  ],
+  "stock_comparison": {
+    "after-probe": {
+      "samples": 30,
+      "volts_min": 4.884011,
+      "volts_max": 4.884847,
+      "amps_min": -0.8801439999999999,
+      "amps_max": -0.8751209999999999,
+      "native_average_calibration_matches": true
+    },
+    "before-units": {
+      "samples": 30,
+      "volts_min": 4.8995359999999994,
+      "volts_max": 4.900312,
+      "amps_min": -0.752806,
+      "amps_max": -0.7483679999999999,
+      "native_average_calibration_matches": true
+    },
+    "after-units": {
+      "samples": 30,
+      "volts_min": 4.909235,
+      "volts_max": 4.9099379999999995,
+      "amps_min": -0.673306,
+      "amps_max": -0.6700419999999999,
+      "native_average_calibration_matches": true
+    }
+  },
+  "comparison_limit": "Sequential sampling with a changing external load; not an accuracy calibration. Native config was inherited across software reboots; cold-start config and wide range not tested.",
+  "restore": {
+    "full_readback_bytes": 456896,
+    "backup_sha256": "c63057eaf08b8625e7ac2fc7270c06d75515e78fdbdd46080bdf4b696984ec67",
+    "two_matching_backups": true,
+    "package_matches_backup": true,
+    "bootloader_range": "[0x4,0x4000)",
+    "bootloader_sha256": "17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf"
+  }
+}

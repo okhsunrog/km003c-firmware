@@ -12,6 +12,16 @@ const RX_FULL: u32 = 1 << 7;
 const TX_EMPTY: u32 = 1 << 5;
 const ERRORS: u32 = 0x1d;
 const POLLS: usize = 200_000;
+const RETAIN: *mut u32 = 0x200f0d40 as *mut u32;
+
+fn retain(index: usize, value: u32) {
+    // Separate from the wrapping USB log and panic/timeout snapshots. The native
+    // loader preserves this bank across software reset, so ID/config/sample
+    // evidence remains readable after the automatic return to DFU.
+    unsafe {
+        RETAIN.add(index).write_volatile(value);
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
@@ -23,6 +33,21 @@ pub enum State {
 static STATE: Mutex<CriticalSectionRawMutex, Cell<State>> = Mutex::new(Cell::new(State::Probing));
 pub fn snapshot() -> State {
     STATE.lock(Cell::get)
+}
+/// Native 2.0.7 at 0x6d78 returns a signed 24-bit result for ADCRANGE=1,
+/// or four times that value for ADCRANGE=0. Its ADC task passes this directly
+/// to the microamp calibration path at 0x17b1c. Thus each signed 20-bit count
+/// represents 16 or 64 microamps *before* the per-device factory correction.
+pub fn uncalibrated_microamps(sample: Sample) -> Option<i32> {
+    if sample.shunt_cal != 0x1062 || sample.math_overflow() {
+        return None;
+    }
+    let lsb = if sample.config & 0x10 != 0 {
+        16000
+    } else {
+        64000
+    };
+    Some((sample.current_nanoamps(lsb) / 1000) as i32)
 }
 fn publish(state: State) {
     STATE.lock(|cell| cell.set(state));
@@ -176,38 +201,116 @@ impl Drop for Spi2Sensor {
 
 #[embassy_executor::task]
 pub async fn task() {
+    for index in 0..24 {
+        retain(index, 0);
+    }
+    retain(0, 0x41444331);
+    retain(1, 1);
     let mut sensor = Ina229::new(unsafe { Spi2Sensor::new() });
     let id = match sensor.identity() {
         Ok(id) => id,
         Err(e) => {
             log::error!("Measurement probe: {e:?}");
+            retain(18, Spi2Sensor::read(0x14));
+            retain(1, 0xe001);
             publish(State::BusError);
             return;
         }
     };
     log::info!("Measurement IDs: {id:?}");
+    retain(2, u32::from(id.manufacturer));
+    retain(3, u32::from(id.device));
     if !id.is_ina229() {
+        retain(1, 0xe002);
         publish(State::WrongDevice {
             manufacturer: id.manufacturer,
             device: id.device,
         });
         return;
     }
-    log::info!("Measurement config: {:?}", sensor.configuration());
+    match sensor.configuration() {
+        Ok(config) => {
+            log::info!("Measurement config: {config:?}");
+            for (index, value) in [
+                config.config,
+                config.adc_config,
+                config.shunt_cal,
+                config.shunt_tempco,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                retain(4 + index, u32::from(value));
+            }
+            retain(1, 2);
+        }
+        Err(e) => {
+            log::error!("Measurement config: {e:?}");
+            retain(18, Spi2Sensor::read(0x14));
+            retain(1, 0xe003);
+            publish(State::BusError);
+            return;
+        }
+    }
+    let mut count = 0u32;
+    let (mut bus_min, mut bus_max) = (u32::MAX, 0u32);
+    let (mut current_min, mut current_max) = (i32::MAX, i32::MIN);
     loop {
         match sensor.sample() {
             Ok(sample) => {
+                count += 1;
+                bus_min = bus_min.min(sample.bus_counts);
+                bus_max = bus_max.max(sample.bus_counts);
+                current_min = current_min.min(sample.current_counts);
+                current_max = current_max.max(sample.current_counts);
+                // Status=0 marks an incomplete record if the deadline resets
+                // midway through publishing; write count/status last.
+                retain(1, 0);
+                for (index, value) in [
+                    sample.bus_counts,
+                    sample.shunt_counts as u32,
+                    sample.current_counts as u32,
+                    sample.temperature_counts as i32 as u32,
+                    u32::from(sample.diagnostic),
+                    bus_min,
+                    bus_max,
+                    current_min as u32,
+                    current_max as u32,
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    retain(9 + index, value);
+                }
+                retain(8, count);
+                if let Some(current) = uncalibrated_microamps(sample) {
+                    retain(19, current as u32);
+                    retain(
+                        20,
+                        if sample.config & 0x10 != 0 {
+                            16000
+                        } else {
+                            64000
+                        },
+                    );
+                } else {
+                    retain(20, 0);
+                }
+                retain(1, 3);
                 log::info!(
-                    "ADC bus={} nV shunt={} pV Iraw={} diag={:04x}",
+                    "ADC bus={} nV shunt={} pV Iraw={} I0={:?} uA diag={:04x}",
                     sample.bus_nanovolts(),
                     sample.shunt_picovolts(),
                     sample.current_counts,
+                    uncalibrated_microamps(sample),
                     sample.diagnostic
                 );
                 publish(State::Sample(sample));
             }
             Err(e) => {
                 log::error!("ADC read: {e:?}");
+                retain(18, Spi2Sensor::read(0x14));
+                retain(1, 0xe004);
                 publish(State::BusError);
                 return;
             }

@@ -11,9 +11,9 @@ The image returns to native DFU about 90 seconds after startup. Holding Exit
 for two seconds also requests DFU; this second path has not been separately
 tested.
 
-The tested device was restored to its exact original 1.9.9 application after
-experiments. Full application readback and unchanged bootloader bytes were
-checked. [Display/button evidence](hardware/display-buttons/README.md) records
+The initial device tests restored the original 1.9.9 application. Subsequent
+ADC tests used stock 2.0.7 and restored that same version with full application
+readback and unchanged bootloader bytes. [Display/button evidence](hardware/display-buttons/README.md) records
 the current run; [USB evidence](hardware/usb-cdc/README.md) preserves earlier
 tests.
 
@@ -37,7 +37,10 @@ Read-modify-write operations preserve unrelated expander outputs.
 | Right / lightning | PB9 | Low |
 
 Inputs have pull-ups and are sampled every 20 ms with repeated-sample debounce.
-The UI draws only when inputs change and uses no heap. Retention RAM contains
+The UI composes changed rows in a 14.7 KB RAM tile and uploads each row as a
+continuous RGB565 block. It does not clear the screen on button changes. ADC
+text is updated only when its displayed string changes; no heap is used.
+This is not TE/VSYNC synchronization. Retention RAM contains
 the debounced mask at `0x200f0d20` and four press counters at `0x200f0d24`
 onward.
 The lightning-marked button's electrical CC behavior is not established by this
@@ -45,9 +48,13 @@ UI test.
 
 ## USB implementation
 
-Offline measurement and passive PD candidates are described in
-[ADC/PD bring-up](docs/adc-pd.md). Both features are disabled by default and have
-not been tested on the device. They do not extend the hardware acceptance above.
+The optional `measurement` feature now reads the hardware-confirmed INA229:
+voltage, shunt, temperature and signed current. Two 90-second runs collected
+720 samples without SPI errors, with concurrent USB echo. Current `I0` uses the
+native scale before per-device factory correction. [ADC evidence](hardware/adc-207/README.md)
+and [ADC/PD bring-up](docs/adc-pd.md) describe limits: cold-start configuration
+and the wide range remain untested. Passive PD capture is still a candidate.
+Both features remain disabled by default.
 
 The [HC32 HAL](https://github.com/okhsunrog/hc32f460-embassy-rs) provides PAC,
 interrupt routing and clock setup. The USB task runs on `embassy-executor` and
@@ -74,7 +81,8 @@ The port explicitly configures:
 
 USB enumeration and echo work with the interrupt-driven async path. There is
 no busy polling, SDK C driver, local driver fork or alternate USB stack in the
-final image. Sensors, measurement circuits and PD logic are not initialized.
+final image. With default features, the measurement circuit and PD logic are
+not initialized; `measurement` adds read-only SPI2 access to the INA229.
 VBUS detection is disabled for the HID-port-powered test setup;
 self-powered operation and general disconnect/reconnect acceptance remain open.
 
@@ -154,7 +162,10 @@ insufficient.
 
 Hold Exit while connecting power through the HID USB port to enter native DFU.
 Exit is PB7, active-low. Keep an exact original package and acquire two matching
-backups before the first erase. Verify image readback before starting it, and
+backups before the first erase of a newly encountered stock image. Reuse that
+verified backup for later tests after checking device identity and live metadata;
+do not acquire the same full backup twice on every iteration.
+Verify image readback before starting it, and
 compare loader bytes throughout. The first four loader bytes were not readable
 through the acquired dump and are not part of that comparison.
 

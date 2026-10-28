@@ -1,0 +1,24 @@
+{
+  "stock_version": "2.0.7",
+  "stock_ram_base": "0x1fffb5a8",
+  "voltage_offsets_microvolts": [
+    -6,
+    -6,
+    -6,
+    -6,
+    -6
+  ],
+  "current_gains_ppm": [
+    1002221,
+    1002221,
+    1002221,
+    1002221,
+    1002221,
+    1002221,
+    1002221,
+    1002221,
+    1002221,
+    1002221
+  ],
+  "current_offset_microamps": 94
+}

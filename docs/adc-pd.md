@@ -1,8 +1,9 @@
 # Measurement and passive PD candidates
 
-Offline implementation dated 2026-10-28. No device reads, writes, resets or
-firmware installation were performed during this work. Existing display/button
-and USB acceptance does **not** establish hardware acceptance of these drivers.
+Implementation and hardware tests dated 2026-10-28. INA229 reads are now
+confirmed on HW2.1 alongside USB/display operation. Two 90-second runs produced
+720 samples without SPI errors. [Evidence](../hardware/adc-207/README.md) records
+stock 2.0.7 comparisons and restoration. Passive PD remains untested on hardware.
 
 ## Measurement
 
@@ -16,8 +17,8 @@ The native SPI2 code is stronger evidence than an unidentified SPI peripheral:
   SHUNT_TEMPCO=`0x001e`. These are INA229 register numbers and SPI framing.
 
 All four SPI helper addresses map to the preserved device 1.9.9 image. The
-INA229-compatible driver remains a candidate until physical manufacturer ID
-`0x5449` and device ID upper 12 bits `0x229` are read. This does not identify a
+INA229 driver returned physical manufacturer ID `0x5449` and device ID
+`0x2291`. This does not identify a
 photographed component on another unit or prove all board revisions are equal.
 See TI's [SPI framing](https://www.ti.com/document-viewer/INA229/datasheet/GUID-9C15D0DA-F5E2-4FE1-9EB9-B62E23643817)
 and [register map](https://www.ti.com/document-viewer/INA229/datasheet/GUID-25B37629-8261-48D8-BE56-62622C36C345).
@@ -32,13 +33,23 @@ keeps CS asserted across the command and response, drains received command bytes
 bounds polling, and disables SPI/releases CS on a transfer error. It stops on an
 ID mismatch or bus error. It never applies `NATIVE_199` automatically.
 
-The UI subtitle reports millivolts and raw signed current counts. Logging adds
+The UI subtitle reports millivolts and uncalibrated `I0` in milliamps. Logging adds
 shunt voltage, current counts and diagnostic flags. Bus voltage uses 195.3125 µV
-per count; shunt range comes from the read CONFIG bit. Current/power scaling is
-withheld until CURRENT_LSB/shunt calibration is established. Samples are separate
+per count; shunt range comes from the read CONFIG bit. Current scaling is
+derived from the actual native 2.0.7 path: SHUNT_CAL `0x1062` gives 16 microamps
+per signed 20-bit count at ADCRANGE=1, or 64 at ADCRANGE=0. The narrow range was
+tested; the wide range is statically derived. A different SHUNT_CAL or math
+overflow falls back to raw current counts. Samples are separate
 register reads, not atomic snapshots. Reading DIAG_ALRT clears some latched flags;
-conversion mode/freshness must be checked during acceptance. An externally shut
+factory current gain/offset are not applied to `I0`. On our unit stock 2.0.7
+uses gain 1002221 ppm and offset 94 microamps; its voltage correction is -6
+microvolts. CSVs from `km003c-rs` verify its averaged output against the native
+formula. The load changed, so different firmware runs are not simultaneous
+calibration points. An externally shut
 down monitor can return stale results until explicitly configured.
+
+These tests inherited the monitor's native configuration across software reboots.
+Cold power-on configuration has not been accepted.
 
 The library's `configure` method checks identity and legal bits before writing;
 it starts the ADC mode last. An interrupted configuration is not rolled back.
@@ -123,3 +134,17 @@ to the device. Input is decimal/hex u16 edge intervals, comma/whitespace separat
 cargo run --manifest-path crates/km003c-drivers/Cargo.toml \
   --target x86_64-unknown-linux-gnu --example pd_decode -- intervals.txt 20 3
 ```
+
+## Retained measurement record
+
+At `0x200f0d40`, 24 little-endian words preserve ADC diagnostics independently
+of the wrapping text log. Word 0 is `0x41444331`; word 1 is status (1 probing,
+2 configured/read, 3 complete sample, 0 partial publication, `0xe001..0xe004`
+probe/identity/config/sample error). Words 2–3 are manufacturer/device IDs;
+4–7 are CONFIG/ADC_CONFIG/SHUNT_CAL/SHUNT_TEMPCO; 8 is sample count.
+Words 9–13 are last bus/shunt/current/temperature counts and DIAG_ALRT;
+14–17 are bus min/max and signed current min/max. Word 18 records SPI status
+on an error. Word 19 is signed uncalibrated microamps when word 20 gives its
+valid scale in nanoamps/count (0 means unavailable). Remaining words are reserved.
+Status/count are published last; software reset preserves this bank, power loss
+need not. These offsets do not overlap button, panic or timeout records.

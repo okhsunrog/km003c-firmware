@@ -24,7 +24,15 @@ const fn metadata() -> [u8; 64] {
         data[i] = 0xff;
         i += 1;
     }
-    let fields: [&[u8]; 3] = [b"KM003C", b"rust-ui", b"2026.10.28"];
+    let fields: [&[u8]; 3] = [
+        b"KM003C",
+        if cfg!(feature = "measurement") {
+            b"rust-adc"
+        } else {
+            b"rust-ui"
+        },
+        b"2026.10.28",
+    ];
     let mut field = 0;
     while field < 3 {
         i = 0;

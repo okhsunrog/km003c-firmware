@@ -80,7 +80,11 @@ impl Sample {
     pub fn math_overflow(self) -> bool {
         self.diagnostic & (1 << 9) != 0
     }
-    // No amperes/power conversion until CURRENT_LSB and board calibration are known.
+    /// The caller supplies CURRENT_LSB for the programmed SHUNT_CAL, range and
+    /// physical shunt. The register value alone cannot determine this scale.
+    pub fn current_nanoamps(self, current_lsb_nanoamps: u32) -> i64 {
+        i64::from(self.current_counts) * i64::from(current_lsb_nanoamps)
+    }
 }
 
 pub struct Ina229<S> {

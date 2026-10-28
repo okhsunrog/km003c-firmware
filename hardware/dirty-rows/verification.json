@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-28",
+  "adc_samples": 360,
+  "spi_errors": false,
+  "usb_echo_all_nine_sizes_passed": true,
+  "button_presses_observed": 0,
+  "visual_tearing_acceptance": "pending; owner did not report the result during the test window",
+  "backup_policy": "Reused prior two-read verified stock 2.0.7 backup; live model, HW and 64-byte metadata matched. No repeated full APP backup.",
+  "custom_image_readback_verified": true,
+  "stock_restore_full_readback_bytes": 456896,
+  "bootloader_unchanged": true,
+  "image_sha256": "12c48fa9da3395266219758de49edee38df1c9261352c0e149681fc0f3e8e0a9"
+}

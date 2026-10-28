@@ -1,0 +1,41 @@
+{
+  "transport": "libusb CDC ACM; DTR=1",
+  "results": [
+    {
+      "bytes": 1,
+      "matched": true
+    },
+    {
+      "bytes": 23,
+      "matched": true
+    },
+    {
+      "bytes": 64,
+      "matched": true
+    },
+    {
+      "bytes": 7,
+      "matched": true
+    },
+    {
+      "bytes": 64,
+      "matched": true
+    },
+    {
+      "bytes": 17,
+      "matched": true
+    },
+    {
+      "bytes": 128,
+      "matched": true
+    },
+    {
+      "bytes": 256,
+      "matched": true
+    },
+    {
+      "bytes": 512,
+      "matched": true
+    }
+  ]
+}

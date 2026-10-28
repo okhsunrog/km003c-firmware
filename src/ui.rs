@@ -1,13 +1,26 @@
-//! Small retained-state diagnostic UI: no heap and no charging-control writes.
+//! Small diagnostic UI: precompose only changed regions, never erase a live
+//! full frame on a key press. No heap and no charging-control writes.
 use core::fmt::Write;
 use embassy_hc32::gpio::{InputPin, Port};
 use embedded_graphics::{
     mono_font::{MonoTextStyle, ascii::FONT_6X10},
     pixelcolor::Rgb565,
     prelude::*,
-    primitives::{PrimitiveStyle, Rectangle},
+    primitives::Rectangle,
     text::Text,
 };
+use km003c_drivers::tile::Tile;
+
+type UiTile = Tile<{ 216 * 34 }>;
+fn text(tile: &mut UiTile, value: &str, position: Point, color: Rgb565) {
+    Text::new(value, position, MonoTextStyle::new(&FONT_6X10, color))
+        .draw(tile)
+        .unwrap();
+}
+fn upload(display: &mut crate::display::Display, tile: &UiTile, origin: Point) {
+    display.blit(Rectangle::new(origin, tile.size()), tile.pixels());
+}
+
 #[embassy_executor::task]
 pub async fn task() {
     let mut aw = unsafe { crate::aw9523::Aw9523::new() };
@@ -16,7 +29,27 @@ pub async fn task() {
     let mut display = unsafe { crate::display::Display::new() };
     display.init().await;
     display.clear(Rgb565::BLACK).unwrap();
-    aw.backlight(30).await.unwrap();
+    // One 14.7 KB tile fits SRAM; a 115.2 KB full framebuffer would leave too
+    // little space for USB, the executor and stack. Glyphs are drawn in RAM so
+    // each upload is a continuous RGB565 stream, not a transaction per pixel.
+    let mut tile = UiTile::new();
+    tile.reset(Size::new(216, 28), Rgb565::BLACK);
+    text(&mut tile, "KM003C / Rust", Point::new(0, 10), Rgb565::WHITE);
+    text(
+        &mut tile,
+        "embedded-graphics",
+        Point::new(0, 24),
+        Rgb565::CYAN,
+    );
+    upload(&mut display, &tile, Point::new(12, 8));
+    tile.reset(Size::new(216, 14), Rgb565::BLACK);
+    text(
+        &mut tile,
+        "Hold EXIT 2s -> loader",
+        Point::new(0, 10),
+        Rgb565::WHITE,
+    );
+    upload(&mut display, &tile, Point::new(12, 220));
     let buttons = unsafe {
         [
             InputPin::new_pull_up(Port::B, 7),
@@ -29,7 +62,8 @@ pub async fn task() {
     let mut previous = 0u8;
     let mut stable = 0u8;
     let mut repeats = 0;
-    let mut redraw = true;
+    let mut dirty = 0x0fu8;
+    let mut lit = false;
     let mut held_exit = 0;
     #[cfg(feature = "measurement")]
     let mut last_measurement = None;
@@ -46,8 +80,8 @@ pub async fn task() {
                 raw |= 1 << i;
             }
         }
-        // Accept a change only after three equal 20 ms samples. Count rising
-        // edges of the active-low keys, not every sample while a key is held.
+        // Three repeated 20 ms samples debounce each transition. Count only
+        // press edges; both press and release dirty the corresponding row.
         if raw == previous {
             repeats = (repeats + 1).min(3);
         } else {
@@ -60,8 +94,8 @@ pub async fn task() {
                     *count += 1;
                 }
             }
+            dirty |= stable ^ raw;
             stable = raw;
-            redraw = true;
             log::info!("Buttons mask={stable:02x}; presses={counts:?}");
             unsafe {
                 (0x200f0d20 as *mut u32).write_volatile(u32::from(stable));
@@ -70,102 +104,77 @@ pub async fn task() {
                 }
             }
         }
-        // Redraw on input changes only, so SPI traffic does not monopolize the
-        // executor and the independent USB task keeps making progress.
-        if redraw {
-            #[cfg(feature = "measurement")]
-            {
-                last_measurement = None;
+        // A key changes one 216x34 region, never the static header/footer or
+        // other rows. Send the complete row with text already composed.
+        for (i, label) in ["EXIT", "OK", "LEFT", "RIGHT"].iter().enumerate() {
+            if dirty & (1 << i) == 0 {
+                continue;
             }
-            display.clear(Rgb565::BLACK).unwrap();
-            Text::new(
-                "KM003C / Rust",
-                Point::new(12, 18),
-                MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE),
-            )
-            .draw(&mut display)
-            .unwrap();
-            Text::new(
-                "embedded-graphics",
-                Point::new(12, 32),
-                MonoTextStyle::new(&FONT_6X10, Rgb565::CYAN),
-            )
-            .draw(&mut display)
-            .unwrap();
-            for (i, label) in ["EXIT", "OK", "LEFT", "RIGHT"].iter().enumerate() {
-                let y = 48 + i as i32 * 40;
-                let pressed = stable & (1 << i) != 0;
-                Rectangle::new(Point::new(12, y), Size::new(216, 34))
-                    .into_styled(PrimitiveStyle::with_fill(if pressed {
-                        Rgb565::GREEN
-                    } else {
-                        Rgb565::BLUE
-                    }))
-                    .draw(&mut display)
-                    .unwrap();
-                let mut text = heapless::String::<32>::new();
-                write!(text, "{label:5} count {}", counts[i]).unwrap();
-                Text::new(
-                    &text,
-                    Point::new(20, y + 22),
-                    MonoTextStyle::new(
-                        &FONT_6X10,
-                        if pressed {
-                            Rgb565::BLACK
-                        } else {
-                            Rgb565::WHITE
-                        },
-                    ),
-                )
-                .draw(&mut display)
-                .unwrap();
-            }
-            Text::new(
-                "Hold EXIT 2s -> loader",
-                Point::new(12, 230),
-                MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE),
-            )
-            .draw(&mut display)
-            .unwrap();
-            redraw = false;
+            let pressed = stable & (1 << i) != 0;
+            tile.reset(
+                Size::new(216, 34),
+                if pressed { Rgb565::GREEN } else { Rgb565::BLUE },
+            );
+            let mut value = heapless::String::<32>::new();
+            write!(value, "{label:5} count {}", counts[i]).unwrap();
+            text(
+                &mut tile,
+                &value,
+                Point::new(8, 22),
+                if pressed {
+                    Rgb565::BLACK
+                } else {
+                    Rgb565::WHITE
+                },
+            );
+            upload(&mut display, &tile, Point::new(12, 48 + i as i32 * 40));
         }
+        dirty = 0;
         #[cfg(feature = "measurement")]
         {
             let sample = crate::measurement::snapshot();
-            if last_measurement != Some(sample) {
-                // Update only the subtitle: a new ADC sample must not force a
-                // whole-screen fill and delay the independent USB task.
-                Rectangle::new(Point::new(12, 22), Size::new(216, 14))
-                    .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
-                    .draw(&mut display)
-                    .unwrap();
-                let mut text = heapless::String::<40>::new();
-                use crate::measurement::State;
-                match sample {
-                    State::Probing => write!(text, "ADC probing"),
-                    State::BusError => write!(text, "ADC bus error"),
-                    State::WrongDevice {
-                        manufacturer,
-                        device,
-                    } => write!(text, "ADC IDs {manufacturer:04x}/{device:04x}"),
-                    State::Sample(value) => write!(
-                        text,
-                        "{}mV Iraw {}{}",
-                        value.bus_nanovolts() / 1_000_000,
-                        value.current_counts,
-                        if value.math_overflow() { " !" } else { "" }
-                    ),
+            let mut value = heapless::String::<40>::new();
+            use crate::measurement::State;
+            match sample {
+                State::Probing => write!(value, "ADC probing"),
+                State::BusError => write!(value, "ADC bus error"),
+                State::WrongDevice {
+                    manufacturer,
+                    device,
+                } => write!(value, "ADC IDs {manufacturer:04x}/{device:04x}"),
+                State::Sample(sample) => {
+                    if let Some(current) = crate::measurement::uncalibrated_microamps(sample) {
+                        write!(
+                            value,
+                            "{}mV I0={}mA",
+                            sample.bus_nanovolts() / 1_000_000,
+                            current / 1000
+                        )
+                    } else {
+                        write!(
+                            value,
+                            "{}mV Iraw {}{}",
+                            sample.bus_nanovolts() / 1_000_000,
+                            sample.current_counts,
+                            if sample.math_overflow() { " !" } else { "" }
+                        )
+                    }
                 }
-                .unwrap();
-                Text::new(
-                    &text,
-                    Point::new(12, 32),
-                    MonoTextStyle::new(&FONT_6X10, Rgb565::CYAN),
-                )
-                .draw(&mut display)
-                .unwrap();
-                last_measurement = Some(sample);
             }
+            .unwrap();
+            // Compare rendered text, not every underlying ADC bit/temperature
+            // or conversion-ready flag. Do not erase and redraw equal strings.
+            if last_measurement.as_ref() != Some(&value) {
+                tile.reset(Size::new(216, 14), Rgb565::BLACK);
+                text(&mut tile, &value, Point::new(0, 10), Rgb565::CYAN);
+                upload(&mut display, &tile, Point::new(12, 22));
+                last_measurement = Some(value);
+            }
+        }
+        if !lit {
+            // Reveal the first completed UI, avoiding visible startup clearing.
+            aw.backlight(30).await.unwrap();
+            lit = true;
         }
         if stable & 1 != 0 {
             held_exit += 1;

@@ -125,15 +125,12 @@ impl Display {
         }
         embassy_time::Timer::after_millis(20).await;
     }
-    fn rectangle(&mut self, area: Rectangle, color: Rgb565) {
-        // CASET/RASET use inclusive, big-endian endpoints. Clip before casting
-        // signed graphics coordinates; a negative point must never wrap to u16.
-        let clipped = area.intersection(&Rectangle::new(Point::zero(), self.size()));
-        let Some(end) = clipped.bottom_right() else {
-            return;
-        };
-        let x = clipped.top_left.x as u16;
-        let y = clipped.top_left.y as u16;
+    fn start_pixels(&mut self, area: Rectangle) -> u32 {
+        // Callers supply a nonempty rectangle wholly within the panel.
+        // CASET/RASET use inclusive, big-endian endpoints.
+        let end = area.bottom_right().unwrap();
+        let x = area.top_left.x as u16;
+        let y = area.top_left.y as u16;
         let saved = self.begin();
         for (cmd, lo, hi) in [(0x2a, x, end.x as u16), (0x2b, y, end.y as u16)] {
             Self::phase(false);
@@ -148,11 +145,37 @@ impl Display {
         Self::phase(false);
         Self::byte(0x2c);
         Self::phase(true);
+        saved
+    }
+    fn rectangle(&mut self, area: Rectangle, color: Rgb565) {
+        // Clip before casting signed coordinates; negative points cannot wrap.
+        let clipped = area.intersection(&self.bounding_box());
+        if clipped.bottom_right().is_none() {
+            return;
+        }
+        let saved = self.start_pixels(clipped);
         // COLMOD=5 selects RGB565; transmit its high byte first.
         let [high, low] = color.into_storage().to_be_bytes();
         for _ in 0..clipped.size.width * clipped.size.height {
             Self::byte(high);
             Self::byte(low);
+        }
+        self.end(saved);
+    }
+    /// Stream a precomposed, tightly packed dirty rectangle in one transaction.
+    /// This avoids per-glyph-pixel address/mux commands and visible erase/draw
+    /// phases. It is not VSYNC/TE synchronization: the LCD still scans live GRAM.
+    pub fn blit(&mut self, area: Rectangle, pixels: &[Rgb565]) {
+        assert_eq!(area.intersection(&self.bounding_box()), area);
+        assert_eq!(pixels.len(), (area.size.width * area.size.height) as usize);
+        if area.bottom_right().is_none() {
+            return;
+        }
+        let saved = self.start_pixels(area);
+        for color in pixels {
+            for byte in color.into_storage().to_be_bytes() {
+                Self::byte(byte);
+            }
         }
         self.end(saved);
     }

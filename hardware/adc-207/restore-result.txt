@@ -1,0 +1,1 @@
+Verified installed firmware 2.0.7 by full readback (456896 bytes, including committed size and CRC).

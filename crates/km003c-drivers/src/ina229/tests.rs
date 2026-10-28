@@ -65,6 +65,7 @@ fn sample_width_sign_and_physical_units() {
     assert_eq!(sample.current_counts, -524288);
     assert_eq!(sample.temperature_millicelsius(), 25000);
     assert!(sample.math_overflow());
+    assert_eq!(sample.current_nanoamps(16000), -8_388_608_000);
     let wide = Sample {
         config: 0,
         temperature_counts: -128,
