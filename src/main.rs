@@ -6,6 +6,10 @@ use cortex_m_rt::{entry, exception};
 
 mod aw9523;
 mod display;
+#[cfg(feature = "measurement")]
+pub mod measurement;
+#[cfg(feature = "pd-capture")]
+pub mod pd_capture;
 mod retention_log;
 mod ui;
 mod usb;
@@ -119,6 +123,8 @@ fn main() -> ! {
     EXECUTOR.init(embassy_executor::Executor::new()).run(|s| {
         s.spawn(usb_task().unwrap());
         s.spawn(ui::task().unwrap());
+        #[cfg(feature = "measurement")]
+        s.spawn(measurement::task().unwrap());
     })
 }
 

@@ -1,0 +1,6 @@
+{
+  "sha256": "1917eb2f05fb848c4f98323d17cbd6eacc3252dfc0f16bb479f8564e0311417a",
+  "entry": "0x102c0",
+  "write_count": 133,
+  "model": "zero-filled MMIO; CPU write trace only"
+}

@@ -1,0 +1,120 @@
+{
+  "catalog_sha256": "9ce6125da454585fde1b5744018f94edc697a23941292cbf55d2a411d4df7517",
+  "original_sha256": "1917eb2f05fb848c4f98323d17cbd6eacc3252dfc0f16bb479f8564e0311417a",
+  "signature_bytes": 20,
+  "functions": [
+    {
+      "catalog_address": "0x6f9a",
+      "original_matches": [
+        "0x6f9a"
+      ]
+    },
+    {
+      "catalog_address": "0x703c",
+      "original_matches": [
+        "0x703c"
+      ],
+      "signature_bytes": 92
+    },
+    {
+      "catalog_address": "0x7098",
+      "original_matches": [
+        "0x7098"
+      ],
+      "signature_bytes": 88
+    },
+    {
+      "catalog_address": "0x7118",
+      "original_matches": [
+        "0x7118"
+      ]
+    },
+    {
+      "catalog_address": "0x52e4",
+      "original_matches": [
+        "0x52e4"
+      ]
+    },
+    {
+      "catalog_address": "0x10224",
+      "original_matches": [
+        "0x102c0"
+      ]
+    },
+    {
+      "catalog_address": "0x10048",
+      "original_matches": [
+        "0x100e4"
+      ]
+    },
+    {
+      "catalog_address": "0xfeb6",
+      "original_matches": [
+        "0xff52"
+      ]
+    },
+    {
+      "catalog_address": "0xd91c",
+      "original_matches": [
+        "0xd9b8"
+      ]
+    },
+    {
+      "catalog_address": "0xf780",
+      "original_matches": [
+        "0xf81c"
+      ]
+    },
+    {
+      "catalog_address": "0xf842",
+      "original_matches": [
+        "0xf8de"
+      ]
+    },
+    {
+      "catalog_address": "0xfc26",
+      "original_matches": [
+        "0xfcc2"
+      ]
+    },
+    {
+      "catalog_address": "0x5c52",
+      "original_matches": [
+        "0x5c52"
+      ]
+    },
+    {
+      "catalog_address": "0x5c9e",
+      "original_matches": [
+        "0x5c9e"
+      ]
+    },
+    {
+      "catalog_address": "0x5d60",
+      "original_matches": [
+        "0x5d60"
+      ]
+    },
+    {
+      "catalog_address": "0x6eb2",
+      "signature_bytes": 20,
+      "original_matches": [
+        "0x6eb2"
+      ]
+    },
+    {
+      "catalog_address": "0x6f8e",
+      "signature_bytes": 12,
+      "original_matches": [
+        "0x6f8e"
+      ]
+    },
+    {
+      "catalog_address": "0x710a",
+      "signature_bytes": 12,
+      "original_matches": [
+        "0x710a"
+      ]
+    }
+  ]
+}

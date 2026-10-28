@@ -45,6 +45,10 @@ UI test.
 
 ## USB implementation
 
+Offline measurement and passive PD candidates are described in
+[ADC/PD bring-up](docs/adc-pd.md). Both features are disabled by default and have
+not been tested on the device. They do not extend the hardware acceptance above.
+
 The [HC32 HAL](https://github.com/okhsunrog/hc32f460-embassy-rs) provides PAC,
 interrupt routing and clock setup. The USB task runs on `embassy-executor` and
 uses `embassy-usb` CDC ACM with **unmodified** `embassy-usb-synopsys-otg` from

@@ -31,6 +31,8 @@ pub async fn task() {
     let mut repeats = 0;
     let mut redraw = true;
     let mut held_exit = 0;
+    #[cfg(feature = "measurement")]
+    let mut last_measurement = None;
     unsafe {
         for i in 0..8 {
             (0x200f0d20 as *mut u32).add(i).write_volatile(0);
@@ -71,6 +73,10 @@ pub async fn task() {
         // Redraw on input changes only, so SPI traffic does not monopolize the
         // executor and the independent USB task keeps making progress.
         if redraw {
+            #[cfg(feature = "measurement")]
+            {
+                last_measurement = None;
+            }
             display.clear(Rgb565::BLACK).unwrap();
             Text::new(
                 "KM003C / Rust",
@@ -122,6 +128,44 @@ pub async fn task() {
             .draw(&mut display)
             .unwrap();
             redraw = false;
+        }
+        #[cfg(feature = "measurement")]
+        {
+            let sample = crate::measurement::snapshot();
+            if last_measurement != Some(sample) {
+                // Update only the subtitle: a new ADC sample must not force a
+                // whole-screen fill and delay the independent USB task.
+                Rectangle::new(Point::new(12, 22), Size::new(216, 14))
+                    .into_styled(PrimitiveStyle::with_fill(Rgb565::BLACK))
+                    .draw(&mut display)
+                    .unwrap();
+                let mut text = heapless::String::<40>::new();
+                use crate::measurement::State;
+                match sample {
+                    State::Probing => write!(text, "ADC probing"),
+                    State::BusError => write!(text, "ADC bus error"),
+                    State::WrongDevice {
+                        manufacturer,
+                        device,
+                    } => write!(text, "ADC IDs {manufacturer:04x}/{device:04x}"),
+                    State::Sample(value) => write!(
+                        text,
+                        "{}mV Iraw {}{}",
+                        value.bus_nanovolts() / 1_000_000,
+                        value.current_counts,
+                        if value.math_overflow() { " !" } else { "" }
+                    ),
+                }
+                .unwrap();
+                Text::new(
+                    &text,
+                    Point::new(12, 32),
+                    MonoTextStyle::new(&FONT_6X10, Rgb565::CYAN),
+                )
+                .draw(&mut display)
+                .unwrap();
+                last_measurement = Some(sample);
+            }
         }
         if stable & 1 != 0 {
             held_exit += 1;
