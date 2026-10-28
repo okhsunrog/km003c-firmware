@@ -18,8 +18,16 @@ fn INT000() {
 pub unsafe fn driver(buffer: &'static mut [u8]) -> (Driver<'static>, intc::Route) {
     use core::ptr::{read_volatile as r, write_volatile as w};
     unsafe {
-        assert_eq!(r(0x400c0040 as *const u32), 0x4f54330a);
-        // The bootloader supplies PLLR=48 MHz. Select it explicitly.
+        let pll =
+            embassy_hc32::clock_decode::pll_from_pllcfgr(r(0x40054100 as *const u32)).unwrap();
+        let input = 16_000_000u64;
+        assert_eq!(
+            input * u64::from(pll.n)
+                / u64::from(pll.m)
+                / u64::from(((r(0x40054100 as *const u32) >> 20) & 15) + 1),
+            48_000_000
+        );
+        // Select the verified 48 MHz PLLR output.
         w(0x400543fe as *mut u16, 0xa501);
         w(0x40054024 as *mut u8, 0xa0);
         w(0x400543fe as *mut u16, 0xa500);
@@ -29,7 +37,31 @@ pub unsafe fn driver(buffer: &'static mut [u8]) -> (Driver<'static>, intc::Route
         }
         w(0x40053bfc as *mut u16, 0xa500);
         w(0x40048004 as *mut u32, r(0x40048004 as *const u32) & !0x100);
-        let route = intc::Route::new(0x113, intc::Line::new(0).unwrap(), 0x80).unwrap();
+        assert_eq!(r(0x400c0040 as *const u32), 0x4f54330a);
+        // Disconnect inherited USB before resetting its FIFOs and endpoint state.
+        w(0x400c0008 as *mut u32, 0);
+        w(0x400c0018 as *mut u32, 0);
+        w(0x400c0804 as *mut u32, r(0x400c0804 as *const u32) | 2);
+        cortex_m::asm::delay(2_000_000);
+        w(
+            0x400c000c as *mut u32,
+            r(0x400c000c as *const u32) | (1 << 6),
+        );
+        cortex_m::asm::delay(1_000_000);
+        wait(0x400c0010, 1 << 31, true);
+        w(0x400c0010 as *mut u32, 1);
+        wait(0x400c0010, 1, false);
+        cortex_m::asm::delay(1000);
+        // Internal FS PHY and forced device mode; turnaround at HCLK >= 32MHz.
+        w(0x400c000c as *mut u32, (1 << 30) | (1 << 6) | (5 << 10));
+        wait(0x400c0014, 1, false);
+        // Match the native loader's documented-by-disassembly B-session setting.
+        w(
+            0x400c0038 as *mut u32,
+            r(0x400c0038 as *const u32) | (1 << 19),
+        );
+        w(0x400c0e00 as *mut u32, 0);
+        let route = intc::Route::new(0x113, intc::Line::new(0).unwrap(), 8).unwrap();
         let instance = OtgInstance {
             regs: Otg::from_ptr(0x400c0000 as *mut _),
             state: STATE.as_state(),
@@ -40,4 +72,13 @@ pub unsafe fn driver(buffer: &'static mut [u8]) -> (Driver<'static>, intc::Route
         };
         (Driver::new(buffer, instance, Config::default()), route)
     }
+}
+
+unsafe fn wait(address: usize, mask: u32, set: bool) {
+    for _ in 0..2_000_000 {
+        if (unsafe { core::ptr::read_volatile(address as *const u32) } & mask != 0) == set {
+            return;
+        }
+    }
+    panic!("USB core timeout");
 }

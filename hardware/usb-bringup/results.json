@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-28",
+  "hardware": "2.1",
+  "usb_enumeration": false,
+  "cdc_echo": false,
+  "panic_location_verified": {
+    "file": "src/usb.rs",
+    "lines": [
+      21,
+      24
+    ]
+  },
+  "full_panic_text_verified": false,
+  "normal_timeout_status": "0x600d0002",
+  "core_id": "0x4f54330a",
+  "gintsts": "0x0480bc28",
+  "gintmsk": "0x000c0010",
+  "continuous_polling_also_failed": true,
+  "stock_restored_full_readback": 453828,
+  "boot_from4_unchanged": true,
+  "clock_entry_finding": "Bootloader jumps to application before its DFU clock/USB initialization; configure application clocks explicitly."
+}
