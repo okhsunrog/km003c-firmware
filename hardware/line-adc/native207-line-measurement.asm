@@ -97,7 +97,7 @@
 0001e248: cmp r1, r2
 0001e24a: bhs #0x1e2c2
 0001e24c: b #0x1e2ba
-0001e24e: nop 
+0001e24e: nop
 0001e250: ldr r7, [sp, #0x14]
 0001e252: movw r6, #0x851f
 0001e256: movs r1, #0
@@ -123,7 +123,7 @@
 0001e292: ldr r2, [sp, #0x14]
 0001e294: add.w r0, r5, #0x24
 0001e298: mov r1, sb
-0001e29a: nop 
+0001e29a: nop
 0001e29c: ldr r3, [r1]
 0001e29e: subs r2, #1
 0001e2a0: smmul r3, r3, r6

@@ -32,7 +32,7 @@ void adc_measure_task(void)
   ushort *puStack_2c;
   uint uStack_18;
   int aiStack_14 [5];
-  
+
   uVar16 = (uint)uRam4004000c;
   FUN_000052d0(0);
   if (uVar16 == 0) {
@@ -236,4 +236,3 @@ LAB_0001e2ba:
     }
   } while( true );
 }
-
