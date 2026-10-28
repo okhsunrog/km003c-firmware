@@ -1,9 +1,12 @@
-//! Passive USB PD PHY decoding. No transmitter, GoodCRC or policy engine.
+//! USB PD PHY decoding and offline waveform encoding. No hardware transmitter,
+//! GoodCRC generator or running policy engine is provided by this module.
 //!
 //! Input to `Decoder` is a sequence of edge-to-edge timer intervals, not GPIO
 //! levels. The capture adapter must establish whether hardware supplies deltas
 //! or timestamps before feeding it. Timebase/tolerance are explicit and are not
 //! inferred from the native firmware's 19/38 tick transmission table.
+
+pub mod tx;
 
 const DATA_SYMBOLS: [u8; 16] = [
     0x1e, 0x09, 0x14, 0x15, 0x0a, 0x0b, 0x0e, 0x0f, 0x12, 0x13, 0x16, 0x17, 0x1a, 0x1b, 0x1c, 0x1d,

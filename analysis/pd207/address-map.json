@@ -1,0 +1,118 @@
+{
+  "catalog_sha256": "9ce6125da454585fde1b5744018f94edc697a23941292cbf55d2a411d4df7517",
+  "installed_207_sha256": "c63057eaf08b8625e7ac2fc7270c06d75515e78fdbdd46080bdf4b696984ec67",
+  "addresses": "runtime; file offset = address - 0x4000",
+  "method": "Thumb instruction and decompiler control-flow comparison, literal registers and call relationships; not prefix matching alone",
+  "functions": [
+    {
+      "catalog_199": "0xa460",
+      "installed_207": "0x9268",
+      "role": "PHY task startup"
+    },
+    {
+      "catalog_199": "0xa546",
+      "installed_207": "0x934e",
+      "role": "RX double-buffer rearm"
+    },
+    {
+      "catalog_199": "0xa614",
+      "installed_207": "0x9430",
+      "role": "TX including timeout cleanup"
+    },
+    {
+      "catalog_199": "0xfeb6",
+      "installed_207": "0xf86e",
+      "role": "CMP input selection"
+    },
+    {
+      "catalog_199": "0xffba",
+      "installed_207": "0xf976",
+      "role": "AF4 timer output selection"
+    },
+    {
+      "catalog_199": "0x1000a",
+      "installed_207": "0xf9c4",
+      "role": "Timer output disable"
+    },
+    {
+      "catalog_199": "0x10048",
+      "installed_207": "0xfa02",
+      "role": "RX DMA start"
+    },
+    {
+      "catalog_199": "0x100d2",
+      "installed_207": "0xfa8c",
+      "role": "TX DMA start"
+    },
+    {
+      "catalog_199": "0x1018c",
+      "installed_207": "0xfb46",
+      "role": "RX/TX setup"
+    },
+    {
+      "catalog_199": "0x10224",
+      "installed_207": "0xfbde",
+      "role": "PHY peripheral initialization"
+    },
+    {
+      "catalog_199": "0x43416",
+      "installed_207": "0x4093e",
+      "role": "PC14/15 output disable"
+    },
+    {
+      "catalog_199": "0x4343c",
+      "installed_207": "0x40958",
+      "role": "PC14/15 output low"
+    },
+    {
+      "catalog_199": "0x4346a",
+      "installed_207": "0x40980",
+      "role": "PC14/15 output high"
+    },
+    {
+      "catalog_199": "0x434b6",
+      "installed_207": "0x409c8",
+      "role": "Composite CC controls; CC1 additionally sets PB6"
+    },
+    {
+      "catalog_199": "0x435ae",
+      "installed_207": "0x40ab0",
+      "role": "Select active RX/TX channel"
+    },
+    {
+      "catalog_199": "0x435de",
+      "installed_207": "0x40ae0",
+      "role": "PB6/expander release"
+    },
+    {
+      "catalog_199": "0x43610",
+      "installed_207": "0x40b12",
+      "role": "PB6/expander mode"
+    },
+    {
+      "catalog_199": "0x43658",
+      "installed_207": "0x40b58",
+      "role": "PC14/15 pull-up selector"
+    },
+    {
+      "catalog_199": "0x436b0",
+      "installed_207": "0x40bb0",
+      "role": "Composite CC controls"
+    },
+    {
+      "catalog_199": "0x1a9c8",
+      "installed_207": "0x1a5ae",
+      "role": "AW9523 port0 output/direction"
+    },
+    {
+      "catalog_199": "0x1aa56",
+      "installed_207": "0x1a63c",
+      "role": "AW9523 port1 latch"
+    },
+    {
+      "catalog_199": "0x5dec",
+      "installed_207": "0x5dc8",
+      "role": "CRC32 initialization"
+    }
+  ]
+}

@@ -43,6 +43,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         packet.wire(),
                         packet.crc
                     );
+                    // usbpd's Driver contract carries SOP header/data bytes
+                    // only. Do not feed cable-addressed SOP' packets into its
+                    // port policy parser as if they came from the partner.
+                    #[cfg(feature = "usbpd")]
+                    if packet.sop == km003c_drivers::pd::Sop::Sop {
+                        println!(
+                            "  usbpd: {:?}",
+                            usbpd::protocol_layer::message::Message::from_bytes(packet.wire())
+                        );
+                    }
                 }
                 Ok(Some(event)) => println!("{intervals}: {event:?}"),
                 Ok(None) => (),

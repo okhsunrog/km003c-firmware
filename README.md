@@ -84,6 +84,13 @@ Both cable orientations and automatic CC selection have now been tested.
 [stock/custom samples](hardware/line-adc/README.md) preserve the 2.0.7 reference,
 raw counts and accuracy limits, including an unresolved VDD-estimate difference.
 Short bench command: `uv run tools/bench.py capture-name --pd auto`.
+
+The [PD transmit analysis](docs/pd-transmit.md) now follows the installed 2.0.7
+code, including final timer completion and CC GPIO controls. An offline Rust
+encoder matches 162 native waveform vectors, and the driver crate optionally
+uses crates.io `usbpd` 2.0.0 for semantic decoding. Hardware TX and an active
+sink policy remain disabled until the analog circuit and error paths are
+validated; this work does not send requests to a connected charger.
 Both features remain disabled by default.
 
 The [HC32 HAL](https://github.com/okhsunrog/hc32f460-embassy-rs) provides PAC,

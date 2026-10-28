@@ -101,7 +101,10 @@ separate line-voltage task explicitly owns and configures ADC1.
 half-bit ticks and tolerance. It implements BMC, 4b5b, five exact SOP ordered sets,
 Hard/Cable Reset, header data-object count, EOP and reflected CRC-32 verification.
 Packets preserve the wire header and payload. Extended messages are raw chunks;
-there is no reassembly, GoodCRC generation, PD negotiation or transmitter.
+there is no reassembly, GoodCRC generation or PD negotiation. The separate
+`pd::tx` module now generates waveform buffers offline, matching 162 native
+2.0.7 vectors; no hardware transmitter is started. See
+[TX research and usbpd integration](pd-transmit.md).
 
 ```sh
 cargo build --release --locked --features pd-capture

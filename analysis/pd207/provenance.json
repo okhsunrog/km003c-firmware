@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-29",
+  "image_sha256": "c63057eaf08b8625e7ac2fc7270c06d75515e78fdbdd46080bdf4b696984ec67",
+  "decompiler": "Ghidra 12.1.4",
+  "code_exports": "Types and function signatures are inferred; critical state changes checked against instructions",
+  "encoder_runtime": "0x1fff8184",
+  "native_scatter_load": {
+    "entry": "0x4c48",
+    "stop_before_main": "0x4c6a"
+  },
+  "crc_init": "0x5dc8",
+  "crc_mode": "0x1e",
+  "crc_model": "zlib CRC32 for reflected input/output and XOR; no cycle-accurate peripheral model",
+  "hardware_access": false,
+  "native_vectors": 162,
+  "vectors": "../../crates/km003c-drivers/tests/data/native-pd207.tsv",
+  "usbpd_registry_version": "2.0.0",
+  "upstream_main_checked": "b21607ad8b960da56ae801c5e42d9a86485a1f81",
+  "custom_hardware_TX_enabled": false
+}
