@@ -35,7 +35,7 @@
 00006dc2: movs r0, #0
 00006dc4: strh r1, [r5]
 00006dc6: bl #0x702c
-00006dca: nop 
+00006dca: nop
 00006dcc: movs r0, #1
 00006dce: bl #0x4cffc
 00006dd2: movs r0, #0
@@ -68,7 +68,7 @@
 00006e16: movs r0, #0
 00006e18: strh r1, [r5]
 00006e1a: bl #0x702c
-00006e1e: nop 
+00006e1e: nop
 00006e20: movs r0, #1
 00006e22: bl #0x4cffc
 00006e26: movs r0, #0
@@ -193,7 +193,7 @@
 00006f78: adds r0, #1
 00006f7a: str r1, [r2, #0x14]
 00006f7c: str r0, [r2]
-00006f7e: nop 
+00006f7e: nop
 00006f80: ldr r0, [r2, #0x14]
 00006f82: lsls r0, r0, #0x1e
 00006f84: bmi #0x6f80
@@ -204,7 +204,7 @@
 00006f90: str r0, [r2, #0x18]
 00006f92: movs r0, #0
 00006f94: str r0, [r2]
-00006f96: nop 
+00006f96: nop
 00006f98: ldr r0, [r2, #0x14]
 00006f9a: lsls r0, r0, #0x1e
 00006f9c: bmi #0x6f98
@@ -248,7 +248,7 @@
 00007056: bic r2, r2, #1
 0000705a: str r2, [r3, #0x14]
 0000705c: str r0, [r3]
-0000705e: nop 
+0000705e: nop
 00007060: ldr r0, [r3, #0x14]
 00007062: lsls r0, r0, #0x1e
 00007064: bmi #0x7060

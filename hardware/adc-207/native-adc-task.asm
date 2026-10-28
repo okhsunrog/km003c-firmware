@@ -47,7 +47,7 @@
 0001dfde: mov.w sl, #0
 0001dfe2: mov r5, sb
 0001dfe4: b #0x1e124
-0001dfe6: nop 
+0001dfe6: nop
 0001dfe8: movs r0, #2
 0001dfea: bl #0x4cffc
 0001dfee: bl #0x6e54
