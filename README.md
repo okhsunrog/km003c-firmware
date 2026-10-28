@@ -8,12 +8,14 @@ The 240×240 ST7789-compatible panel shows an `embedded-graphics` diagnostic UI.
 Button rows highlight and count presses; concurrent byte-for-byte USB echo
 passed for 1, 23, 64, 7, 64, 17, 128, 256 and 512 bytes.
 The image returns to native DFU about 90 seconds after startup. Holding Exit
-for two seconds also requests DFU; this second path has not been separately tested.
+for two seconds also requests DFU; this second path has not been separately
+tested.
 
 The tested device was restored to its exact original 1.9.9 application after
 experiments. Full application readback and unchanged bootloader bytes were
 checked. [Display/button evidence](hardware/display-buttons/README.md) records
-the current run; [USB evidence](hardware/usb-cdc/README.md) preserves earlier tests.
+the current run; [USB evidence](hardware/usb-cdc/README.md) preserves earlier
+tests.
 
 ## Display and buttons
 
@@ -36,8 +38,10 @@ Read-modify-write operations preserve unrelated expander outputs.
 
 Inputs have pull-ups and are sampled every 20 ms with repeated-sample debounce.
 The UI draws only when inputs change and uses no heap. Retention RAM contains
-the debounced mask at `0x200f0d20` and four press counters at `0x200f0d24` onward.
-The lightning-marked button's electrical CC behavior is not established by this UI test.
+the debounced mask at `0x200f0d20` and four press counters at `0x200f0d24`
+onward.
+The lightning-marked button's electrical CC behavior is not established by this
+UI test.
 
 ## USB implementation
 
@@ -66,7 +70,8 @@ The port explicitly configures:
 
 USB enumeration and echo work with the interrupt-driven async path. There is
 no busy polling, SDK C driver, local driver fork or alternate USB stack in the
-final image. Sensors, measurement circuits and PD logic are not initialized. VBUS detection is disabled for the HID-port-powered test setup;
+final image. Sensors, measurement circuits and PD logic are not initialized.
+VBUS detection is disabled for the HID-port-powered test setup;
 self-powered operation and general disconnect/reconnect acceptance remain open.
 
 ## Build and package
@@ -79,7 +84,8 @@ cargo clippy --release --locked -- -D warnings
 
 The configured target is `thumbv7em-none-eabihf`. Use `rust-objcopy -O binary`
 on `target/thumbv7em-none-eabihf/release/km003c-rust-smoke` for the raw image.
-Keep task artifacts under `/home/okhsunrog/tmp_zfs/codex_tmp/km003c-rust-bringup/`.
+Keep task artifacts under
+`/home/okhsunrog/tmp_zfs/codex_tmp/km003c-rust-bringup/`.
 
 The offline packaging helper reuses the Python modules from the sibling
 research checkout:
@@ -102,9 +108,11 @@ The archived hardware harness shows the lower-level library flow actually used.
 uv run tools/usb_echo.py --output RESULT.json
 ```
 
-On systems where PyUSB cannot discover libusb, provide `--libusb PATH_TO_LIBRARY`.
+On systems where PyUSB cannot discover libusb, provide `--libusb
+PATH_TO_LIBRARY`.
 The tool waits for the experimental product descriptor, claims its CDC
-interfaces, sets DTR and verifies the listed payload sizes through bulk endpoints
+interfaces, sets DTR and verifies the listed payload sizes through bulk
+endpoints
 `0x01` / `0x82`. It temporarily detaches an attached kernel driver if necessary
 and attempts to restore it when finished. No serial kernel driver is required.
 The payloads and eight-packet queue are intended for these bounded bring-up
@@ -116,13 +124,15 @@ The deadline cannot recover a hang that permanently masks interrupts.
 ## Retention diagnostics
 
 Trace logging uses a 3072-byte text ring at `0x200f0000`, with its monotonic
-write cursor at `0x200f0c00`. Read the last `min(cursor, 3072)` bytes in ring order.
+write cursor at `0x200f0c00`. Read the last `min(cursor, 3072)` bytes in ring
+order.
 It survives a software reset; complete power loss need not preserve it.
 
 The panic handler formats a bounded, zero-terminated 256-byte message at
 `0x200f0e00`, records the source line at `0x200f0fd0` and a zero-padded 24-byte
 file prefix at `0x200f0fd4`, then requests native DFU and resets. Interrupts are
-masked while recording panic/reset state. Both the source location and formatted message were verified on hardware when
+masked while recording panic/reset state. Both the source location and formatted
+message were verified on hardware when
 the flash-CS guard triggered during display bring-up.
 
 The status at `0x200f0fcc` distinguishes panic (`0xbad00002`), HardFault
@@ -133,7 +143,8 @@ interpret those fields as a panic location unless the status indicates panic.
 The loader request is a separate word at `0x200f0ff0`.
 
 Read diagnostics in native DFU before restoring the stock app. Bootloader reply
-IDs are independent of request IDs, so an APP-only memory reader is insufficient.
+IDs are independent of request IDs, so an APP-only memory reader is
+insufficient.
 
 ## Recovery
 
@@ -145,4 +156,5 @@ through the acquired dump and are not part of that comparison.
 
 The initial 1672-byte Rust execution test and the complete MCU-pad inventory,
 loader analysis, source links and earlier evidence live in the
-[research repository](https://github.com/okhsunrog/km003c-protocol-research/tree/main/docs/firmware).
+[research
+repository](https://github.com/okhsunrog/km003c-protocol-research/tree/main/docs/firmware).
