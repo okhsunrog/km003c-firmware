@@ -1,0 +1,7 @@
+MEMORY
+{
+  FLASH : ORIGIN = 0x00004000, LENGTH = 0x0006fffe
+  RAM : ORIGIN = 0x20000000, LENGTH = 0x0001fff0
+}
+_stack_start = ORIGIN(RAM) + LENGTH(RAM);
+_stext = ORIGIN(FLASH) + 0x460;
