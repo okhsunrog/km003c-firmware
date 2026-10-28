@@ -129,6 +129,8 @@ fn main() -> ! {
         cortex_m::interrupt::enable();
     }
     EXECUTOR.init(embassy_executor::Executor::new()).run(|s| {
+        #[cfg(feature = "measurement")]
+        measurement::init();
         s.spawn(usb_task().unwrap());
         s.spawn(ui::task().unwrap());
         #[cfg(feature = "measurement")]

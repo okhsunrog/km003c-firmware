@@ -1,10 +1,14 @@
-//! Optional, read-only SPI2 measurement task. No sensor configuration writes.
+//! Optional SPI2 measurement task. Configure the identified INA229 explicitly;
+//! read factory coefficients without changing the native settings storage.
 //! Enable explicitly with `--features measurement` after reviewing board pins.
 use core::cell::Cell;
 use embassy_hc32::gpio::{AlternateMode, AlternatePin, Level, OutputPin, Port};
 use embassy_sync::blocking_mutex::{Mutex, raw::CriticalSectionRawMutex};
 use embedded_hal::spi::{ErrorKind, ErrorType, Operation, SpiDevice};
-use km003c_drivers::ina229::{Ina229, Sample};
+use km003c_drivers::{
+    calibration::{Calibration, Measurement},
+    ina229::{Configuration, Ina229, Sample},
+};
 
 const BASE: usize = 0x4001c400;
 const BUSY: u32 = 1 << 1;
@@ -13,6 +17,63 @@ const TX_EMPTY: u32 = 1 << 5;
 const ERRORS: u32 = 0x1d;
 const POLLS: usize = 200_000;
 const RETAIN: *mut u32 = 0x200f0d40 as *mut u32;
+const INIT_RETAIN: *mut u32 = 0x200f0c10 as *mut u32;
+static CALIBRATION: Mutex<CriticalSectionRawMutex, Cell<Option<Calibration>>> =
+    Mutex::new(Cell::new(None));
+
+fn init_retain(index: usize, value: u32) {
+    unsafe {
+        INIT_RETAIN.add(index).write_volatile(value);
+    }
+}
+pub fn init() {
+    // Called before spawning either task, so flash/calibration publication
+    // cannot race the measurement task's initialization.
+    for index in 0..24 {
+        retain(index, 0);
+    }
+    for index in 0..16 {
+        init_retain(index, 0);
+    }
+    retain(0, 0x41444331);
+    retain(1, 1);
+    init_retain(0, 0x494e4931);
+}
+pub fn factory_settings(id: u16, block: &[u8; 96]) {
+    retain(21, u32::from(id));
+    retain(23, 0x3ff100);
+    // A raw copy supports CRC/layout diagnosis after returning to native DFU.
+    for (i, &byte) in block.iter().enumerate() {
+        unsafe {
+            (0x200f0da0 as *mut u8).add(i).write_volatile(byte);
+        }
+    }
+    match Calibration::from_settings(block) {
+        Ok(calibration) => {
+            CALIBRATION.lock(|cell| cell.set(Some(calibration)));
+            retain(22, 1);
+            log::info!("Flash ID={id:04x}; factory calibration CRC valid: {calibration:?}");
+        }
+        Err(error) => {
+            use km003c_drivers::calibration::Error;
+            let code = match error {
+                Error::Length => 2,
+                Error::Checksum => 3,
+                Error::LegacyFormat => 4,
+                Error::Uncalibrated => 5,
+                Error::Coefficient => 6,
+            };
+            retain(22, code);
+            log::error!("Flash ID={id:04x}; calibration unavailable: {error:?}; keeping I0");
+        }
+    }
+}
+pub fn corrected(sample: Sample) -> Option<Measurement> {
+    let current = uncalibrated_microamps(sample)?;
+    CALIBRATION
+        .lock(Cell::get)?
+        .correct((sample.bus_nanovolts() / 1000) as u32, current)
+}
 
 fn retain(index: usize, value: u32) {
     // Separate from the wrapping USB log and panic/timeout snapshots. The native
@@ -201,11 +262,6 @@ impl Drop for Spi2Sensor {
 
 #[embassy_executor::task]
 pub async fn task() {
-    for index in 0..24 {
-        retain(index, 0);
-    }
-    retain(0, 0x41444331);
-    retain(1, 1);
     let mut sensor = Ina229::new(unsafe { Spi2Sensor::new() });
     let id = match sensor.identity() {
         Ok(id) => id,
@@ -228,8 +284,52 @@ pub async fn task() {
         });
         return;
     }
+    if cfg!(feature = "measurement-reset-test") {
+        // Sensor-only reset reproduces its documented POR register defaults;
+        // it is not claimed as a cold-start test of the MCU or the whole board.
+        if let Err(error) = sensor.reset() {
+            log::error!("INA229 reset: {error:?}");
+            retain(1, 0xe005);
+            publish(State::BusError);
+            return;
+        }
+        embassy_time::Timer::after_millis(20).await;
+        init_retain(15, 1);
+    }
+    let before = match sensor.configuration() {
+        Ok(config) => config,
+        Err(error) => {
+            log::error!("Initial INA229 config: {error:?}");
+            retain(1, 0xe003);
+            publish(State::BusError);
+            return;
+        }
+    };
+    for (i, v) in [
+        before.config,
+        before.adc_config,
+        before.shunt_cal,
+        before.shunt_tempco,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        init_retain(2 + i, u32::from(v));
+    }
+    if let Err(error) = sensor.configure(Configuration::NATIVE_199) {
+        log::error!("INA229 configure: {error:?}");
+        retain(1, 0xe006);
+        publish(State::BusError);
+        return;
+    }
     match sensor.configuration() {
         Ok(config) => {
+            if config != Configuration::NATIVE_199 {
+                log::error!("INA229 config readback mismatch: {config:?}");
+                retain(1, 0xe007);
+                publish(State::BusError);
+                return;
+            }
             log::info!("Measurement config: {config:?}");
             for (index, value) in [
                 config.config,
@@ -241,8 +341,10 @@ pub async fn task() {
             .enumerate()
             {
                 retain(4 + index, u32::from(value));
+                init_retain(6 + index, u32::from(value));
             }
             retain(1, 2);
+            init_retain(1, 2);
         }
         Err(e) => {
             log::error!("Measurement config: {e:?}");
@@ -255,9 +357,22 @@ pub async fn task() {
     let mut count = 0u32;
     let (mut bus_min, mut bus_max) = (u32::MAX, 0u32);
     let (mut current_min, mut current_max) = (i32::MAX, i32::MIN);
+    let fresh_deadline = embassy_time::Instant::now() + embassy_time::Duration::from_millis(100);
     loop {
         match sensor.sample() {
             Ok(sample) => {
+                if count == 0 && sample.diagnostic & 2 == 0 {
+                    if embassy_time::Instant::now() >= fresh_deadline {
+                        log::error!("INA229 first conversion timeout");
+                        retain(1, 0xe008);
+                        publish(State::BusError);
+                        return;
+                    }
+                    embassy_time::Timer::after_millis(2).await;
+                    continue;
+                }
+                init_retain(1, 3);
+                init_retain(12, u32::from(sample.diagnostic));
                 count += 1;
                 bus_min = bus_min.min(sample.bus_counts);
                 bus_max = bus_max.max(sample.bus_counts);
@@ -297,6 +412,13 @@ pub async fn task() {
                     retain(20, 0);
                 }
                 retain(1, 3);
+                if let Some(value) = corrected(sample) {
+                    init_retain(10, value.voltage_microvolts);
+                    init_retain(11, value.current_microamps as u32);
+                    init_retain(13, 1);
+                } else {
+                    init_retain(13, 0);
+                }
                 log::info!(
                     "ADC bus={} nV shunt={} pV Iraw={} I0={:?} uA diag={:04x}",
                     sample.bus_nanovolts(),

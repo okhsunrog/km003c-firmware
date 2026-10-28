@@ -59,6 +59,8 @@ subsequent display changes have a [separate smoke test](../dirty-rows/README.md)
 and still need visual confirmation of the tearing fix.
 
 The tests inherited sensor configuration across software reboots from stock.
-Cold-start configuration, wide-range current, the full factory-correction path
-in custom firmware and passive PD capture remain untested. The tested feature
-performs no monitor configuration writes.
+At this stage, cold-start configuration, wide-range current, factory correction
+and passive PD were untested; the image performed no configuration writes.
+[Later startup/calibration tests](../cold-adc/README.md) add explicit configuration
+from sensor reset and persisted factory correction. Whole-board cold-start
+acceptance remains separate.

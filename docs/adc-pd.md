@@ -1,4 +1,4 @@
-# Measurement and passive PD candidates
+# Measurement and passive PD
 
 Implementation and hardware tests dated 2026-10-28. INA229 reads are now
 confirmed on HW2.1 alongside USB/display operation. Two 90-second runs produced
@@ -27,29 +27,58 @@ and [register map](https://www.ti.com/document-viewer/INA229/datasheet/GUID-25B3
 cargo build --release --locked --features measurement
 ```
 
-This opt-in image starts the read-only task on SPI2: PA8 SCK AF47, PA10 MOSI
+This opt-in image starts the measurement task on SPI2: PA8 SCK AF47, PA10 MOSI
 AF44, PB0 MISO AF45, PA7 manual CS; mode 1, 3 MHz at PCLK1=96 MHz. The transport
 keeps CS asserted across the command and response, drains received command bytes,
 bounds polling, and disables SPI/releases CS on a transfer error. It stops on an
-ID mismatch or bus error. It never applies `NATIVE_199` automatically.
+ID mismatch or bus error. After identity checks it explicitly applies
+`NATIVE_199`, verifies all four registers and waits up to 100 ms for conversion
+ready before publishing the first sample. ADC_CONFIG is written last.
 
-The UI subtitle reports millivolts and uncalibrated `I0` in milliamps. Logging adds
-shunt voltage, current counts and diagnostic flags. Bus voltage uses 195.3125 µV
-per count; shunt range comes from the read CONFIG bit. Current scaling is
-derived from the actual native 2.0.7 path: SHUNT_CAL `0x1062` gives 16 microamps
-per signed 20-bit count at ADCRANGE=1, or 64 at ADCRANGE=0. The narrow range was
-tested; the wide range is statically derived. A different SHUNT_CAL or math
-overflow falls back to raw current counts. Samples are separate
-register reads, not atomic snapshots. Reading DIAG_ALRT clears some latched flags;
-factory current gain/offset are not applied to `I0`. On our unit stock 2.0.7
-uses gain 1002221 ppm and offset 94 microamps; its voltage correction is -6
-microvolts. CSVs from `km003c-rs` verify its averaged output against the native
-formula. The load changed, so different firmware runs are not simultaneous
-calibration points. An externally shut
-down monitor can return stale results until explicitly configured.
+The meter UI dedicates three large rows to voltage, signed current and power,
+with temperature and CAL/RAW status below/above them. Button counters remain in
+retention/logs; holding Exit for two seconds still requests the native loader.
+Changed strings are composed in a 19,008-byte RGB565 tile, including scaled
+40-pixel-high glyphs, then uploaded as contiguous rectangles. This reduces
+redraw artifacts but does not synchronize to panel scanout.
 
-These tests inherited the monitor's native configuration across software reboots.
-Cold power-on configuration has not been accepted.
+Bus voltage uses 195.3125 µV/count; shunt range comes from CONFIG. Native 2.0.7
+SHUNT_CAL `0x1062` corresponds to 16 µA/current count with ADCRANGE=1, or 64 with
+ADCRANGE=0. Narrow range is hardware-tested; wide range is statically derived.
+A different SHUNT_CAL or math overflow makes current unavailable. Samples are
+separate register reads, not atomic snapshots. DIAG_ALRT reads clear some flags.
+
+### Factory correction and startup
+
+Before panel initialization, its exclusive QSPI owner reads the 96-byte settings-A
+block at external flash offset `0x3ff100`. It exits QPI with `FF`, uses standard
+SPI commands `90` and `03`, and never sends write-enable, erase or program.
+The flash returned legacy ID `0x8515`; its exact model is not established.
+CRC-32 covers the first 92 bytes. Legacy/uncalibrated flags or out-of-bounds
+coefficients reject calibration; the UI then displays RAW with native `I0` scale.
+The implementation does not migrate old settings or silently invent coefficients.
+
+Stock 2.0.7 reader `0x21818` adds `0x3ff000`; startup `0x48520` requests offset
+`0x100`. The current settings layout contains five signed voltage offsets at
+`+0x1c`, ten current gains at `+0x30` and signed current offset at `+0x58`.
+Our unit has offsets -6 µV, gains 1002221 ppm and current offset 94 µA.
+The Rust implementation reproduces native `0x17b1c`, including voltage bands,
+sign-dependent current gain bands and signed division. A synthetic profile
+exercises 324 boundary/sign vectors executed against the actual stock
+instructions. All match Rust. This establishes algorithm equivalence for those
+vectors, not absolute metrology accuracy.
+
+The stock live RAM block at `0x1fffb5a8` has a mutable word at `+0x10` and a stale
+CRC. Its persistent flash copy has a valid CRC. Therefore live Settings protocol
+CRC failure must not be treated as evidence that persisted calibration is bad,
+and the Rust firmware validates the flash copy without weakening CRC checks.
+
+`--features measurement,measurement-reset-test` first resets only INA229 and
+waits 20 ms. Hardware acceptance produced defaults `0000/fb68/1000/0000`, then
+native profile `0170/fdb0/1062/001e`, 360 samples, and valid factory correction.
+This does not prove a whole-board cold start. The normal measurement image does
+not reset the sensor. Physical full-power-off acceptance remains pending.
+See [startup/calibration evidence](../hardware/cold-adc/README.md).
 
 The library's `configure` method checks identity and legal bits before writing;
 it starts the ADC mode last. An interrupted configuration is not rolled back.
@@ -139,12 +168,31 @@ cargo run --manifest-path crates/km003c-drivers/Cargo.toml \
 
 At `0x200f0d40`, 24 little-endian words preserve ADC diagnostics independently
 of the wrapping text log. Word 0 is `0x41444331`; word 1 is status (1 probing,
-2 configured/read, 3 complete sample, 0 partial publication, `0xe001..0xe004`
-probe/identity/config/sample error). Words 2–3 are manufacturer/device IDs;
+2 configured/read, 3 complete sample, 0 partial publication, `0xe001..0xe008`
+probe/identity/config/sample/reset/configure/readback/conversion-timeout error).
+Words 2–3 are manufacturer/device IDs;
 4–7 are CONFIG/ADC_CONFIG/SHUNT_CAL/SHUNT_TEMPCO; 8 is sample count.
 Words 9–13 are last bus/shunt/current/temperature counts and DIAG_ALRT;
 14–17 are bus min/max and signed current min/max. Word 18 records SPI status
 on an error. Word 19 is signed uncalibrated microamps when word 20 gives its
-valid scale in nanoamps/count (0 means unavailable). Remaining words are reserved.
+valid scale in nanoamps/count (0 means unavailable). Word 21 is the flash legacy
+ID; 22 is calibration status (1 valid, 2 length, 3 CRC, 4 legacy, 5 uncalibrated,
+6 coefficient bounds); 23 is the source offset `0x3ff100`.
 Status/count are published last; software reset preserves this bank, power loss
 need not. These offsets do not overlap button, panic or timeout records.
+
+An independent 16-word init record at `0x200f0c10` starts with `0x494e4931`.
+Word 1 is stage (2 configured/readback, 3 sampling); 2–5 are the four registers
+before configuration; 6–9 after. Words 10–11 are last corrected µV/signed µA;
+12 is DIAG_ALRT, 13 indicates valid correction, 14 reserved, 15 indicates the
+sensor-reset test feature. Raw factory settings occupy 96 bytes at `0x200f0da0`.
+These records end before the panic buffer at `0x200f0e00`.
+
+Reproduce the native correction fixtures with the exact preserved stock dump:
+
+```sh
+uv run tools/native_calibration_vectors.py ORIGINAL_207.bin --output vectors.csv
+```
+
+The script checks its SHA-256 before using version-specific addresses. It runs
+only synthetic RAM and bounded Unicorn emulation, with no device access.

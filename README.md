@@ -4,9 +4,11 @@ Rust 2024 firmware for ChargerLAB POWER-Z KM003C HW2.1 (HC32F460JETA).
 The application starts at `0x4000` and preserves the native bootloader and ICG.
 
 **Display, all four buttons and Embassy USB CDC echo are verified on hardware.**
-The 240×240 ST7789-compatible panel shows an `embedded-graphics` diagnostic UI.
-Button rows highlight and count presses; concurrent byte-for-byte USB echo
-passed for 1, 23, 64, 7, 64, 17, 128, 256 and 512 bytes.
+The 240×240 ST7789-compatible panel shows an `embedded-graphics` meter UI:
+large voltage, signed current and power, plus temperature and CAL/RAW status.
+Button diagnostics are retained in logs/RAM instead of taking screen space.
+Concurrent byte-for-byte USB echo passed for 1, 23, 64, 7, 64, 17, 128, 256 and
+512 bytes, including the new meter image.
 The image returns to native DFU about 90 seconds after startup. Holding Exit
 for two seconds also requests DFU; this path is now verified on hardware.
 For manual visual checks, `--features measurement,manual-ui-test` extends only
@@ -38,9 +40,10 @@ Read-modify-write operations preserve unrelated expander outputs.
 | Right / lightning | PB9 | Low |
 
 Inputs have pull-ups and are sampled every 20 ms with repeated-sample debounce.
-The UI composes changed rows in a 14.7 KB RAM tile and uploads each row as a
-continuous RGB565 block. It does not clear the screen on button changes. ADC
-text is updated only when its displayed string changes; no heap is used.
+The UI composes changed regions in a 19,008-byte RAM tile and uploads each
+region as a continuous RGB565 block. Large digits are scaled in RAM. Button
+changes do not clear the screen. ADC text updates only when its displayed
+string changes; no heap is used.
 The owner confirmed the full-screen band disappeared; intermittent tearing
 inside the updated row remains. This is not TE/VSYNC synchronization.
 Retention RAM contains
@@ -51,12 +54,16 @@ UI test.
 
 ## USB implementation
 
-The optional `measurement` feature now reads the hardware-confirmed INA229:
-voltage, shunt, temperature and signed current. Two 90-second runs collected
-720 samples without SPI errors, with concurrent USB echo. Current `I0` uses the
-native scale before per-device factory correction. [ADC evidence](hardware/adc-207/README.md)
-and [ADC/PD bring-up](docs/adc-pd.md) describe limits: cold-start configuration
-and the wide range remain untested. Passive PD capture is still a candidate.
+The optional `measurement` feature configures the hardware-confirmed INA229,
+checks register readback and waits for a fresh conversion. Factory coefficients
+are read from external flash at `0x3ff100`, validated by CRC and applied using the
+stock correction algorithm. Invalid/legacy settings show RAW instead of CAL;
+settings storage is never written. A sensor-only reset test collected 360
+samples from POR defaults with valid factory correction. Whole-board cold-start
+acceptance is still pending. [Latest evidence](hardware/cold-adc/README.md),
+[earlier ADC evidence](hardware/adc-207/README.md) and
+[ADC/PD bring-up](docs/adc-pd.md) distinguish these checks.
+Wide-range current remains untested. Passive PD capture is still a candidate.
 Both features remain disabled by default.
 
 The [HC32 HAL](https://github.com/okhsunrog/hc32f460-embassy-rs) provides PAC,
@@ -85,7 +92,7 @@ The port explicitly configures:
 USB enumeration and echo work with the interrupt-driven async path. There is
 no busy polling, SDK C driver, local driver fork or alternate USB stack in the
 final image. With default features, the measurement circuit and PD logic are
-not initialized; `measurement` adds read-only SPI2 access to the INA229.
+not initialized; `measurement` configures and reads the INA229 through SPI2.
 VBUS detection is disabled for the HID-port-powered test setup;
 self-powered operation and general disconnect/reconnect acceptance remain open.
 

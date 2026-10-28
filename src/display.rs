@@ -15,6 +15,50 @@ const SR: *const u32 = 0x9c00000c as *const u32;
 const DATA: *mut u32 = 0x9c000010 as *mut u32;
 pub struct Display;
 impl Display {
+    /// Read the native settings-A copy without any write-enable, program or
+    /// erase command. Call before panel init while this owner has the entire
+    /// shared QSPI bus. Leave flash in standard SPI, which also works after a
+    /// real power-on; later panel transactions save/restore that controller mode.
+    #[cfg(feature = "measurement")]
+    pub fn factory_settings(&mut self) -> (u16, [u8; 96]) {
+        Self::idle();
+        unsafe {
+            write(0x42a702bc as *mut u32, 1); // LCD deselected throughout.
+            // Native 2.0.7 0xcd88 exits QPI with FF before selecting standard
+            // SPI. Send the exit at a conservative HCLK/24 with all phases quad;
+            // a flash already in SPI ignores the incomplete 2-clock opcode.
+            write(CR, 0x00172a87 | 0x20);
+            Self::byte(0xff);
+            Self::idle();
+            write(CR, 0x00172a87);
+            write(CR, 0x00170080); // Mode 3, standard SPI, no prefetch.
+        }
+        let mut id = [0; 2];
+        self.flash_read(&[0x90, 0, 0, 0], &mut id);
+        let mut block = [0; 96];
+        // Native settings reader 0x21818 adds 0x3ff000; startup requests 0x100.
+        self.flash_read(&[0x03, 0x3f, 0xf1, 0x00], &mut block);
+        (u16::from_be_bytes(id), block)
+    }
+    #[cfg(feature = "measurement")]
+    fn flash_read(&mut self, command: &[u8], response: &mut [u8]) {
+        Self::idle();
+        unsafe {
+            write(CR, read(CR) | 0x20);
+        }
+        for &byte in command {
+            Self::byte(byte);
+        }
+        Self::idle();
+        for byte in response {
+            // As in native 0x90 readback: a DCOM read clocks a receive byte.
+            *byte = unsafe { read(DATA) } as u8;
+        }
+        Self::idle();
+        unsafe {
+            write(CR, read(CR) & !0x20);
+        }
+    }
     /// Configure the shared controller without issuing any external-flash command.
     ///
     /// # Safety

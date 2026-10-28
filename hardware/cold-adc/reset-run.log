@@ -1,0 +1,228 @@
+   Compiling km003c-bringup-host v0.1.0 (/home/okhsunrog/tmp_zfs/codex_tmp/km003c-rust-bringup/host)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.51s
+     Running `/home/okhsunrog/tmp_zfs/codex_tmp/km003c-rust-bringup/host/target/debug/km003c-bringup-host --run-smoke`
+Reused cached two-read verified 2.0.7 backup; live model/HW/metadata match
+FirmwareUpdateProgress { stage: Connecting, bytes_written: 0, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: CheckingStatus, bytes_written: 0, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Erasing, bytes_written: 0, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 0, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 4080, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 8160, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 12240, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 16320, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 20400, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 24480, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 28560, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 32640, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 36720, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 40800, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 44880, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 48960, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 53040, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 57120, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 61200, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 65280, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 69360, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 73440, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 77520, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 81600, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 85680, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 89760, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 93840, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 97920, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 102000, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 106080, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 107680, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Verifying, bytes_written: 107680, total_bytes: 107680 }
+FirmwareUpdateProgress { stage: Complete, bytes_written: 107680, total_bytes: 107680 }
+Custom image readback and unchanged bootloader verified; starting Rust
+driver log: 
+    0x65,
+    0x0,
+    0x73,
+    0x0,
+    0x74,
+    0x0,
+]
+write ep=EndpointAddress(128): diepctl 00028000 ftxfsts 00000010
+write ep=EndpointAddress(128) wait for prev: ready
+write ep=EndpointAddress(128) wait for fifo: ready
+write done ep=EndpointAddress(128)
+control: data_in waiting for status
+read start len=0
+in ep=0 irq val=000020c1
+=== status 01450000
+OUT_DATA_RX ep=0 len=0
+=== status 01470000
+OUT_DATA_DONE ep=0
+read ep=EndpointAddress(0) done len=0
+control: complete
+ADC bus=4986914062 nV shunt=-45625000 pV Iraw=-570 I0=Some(-9120) uA diag=0003
+=== status 00ec0080
+SETUP_DATA_RX
+=== status 01080000
+SETUP_DATA_DONE ep=0
+oepint
+out ep=0 irq val=00008009
+SETUP received: [
+    0x80,
+    0x6,
+    0x0,
+    0x3,
+    0x0,
+    0x0,
+    0x0,
+    0x10,
+]
+control request: Request { direction: In, request_type: Standard, recipient: Device, request: 6, value: 768, index: 0, length: 4096 }
+control: data_in write: [
+    0x4,
+    0x3,
+    0x9,
+    0x4,
+]
+write ep=EndpointAddress(128) data=[
+    0x4,
+    0x3,
+    0x9,
+    0x4,
+]
+write ep=EndpointAddress(128): diepctl 00028000 ftxfsts 00000010
+write ep=EndpointAddress(128) wait for prev: ready
+write ep=EndpointAddress(128) wait for fifo: ready
+write done ep=EndpointAddress(128)
+in ep=0 irq val=000020c1
+=== status 01050000
+OUT_DATA_RX ep=0 len=0
+=== status 01070000
+OUT_DATA_DONE ep=0
+control: data_in waiting for status
+read start len=0
+read ep=EndpointAddress(0) done len=0
+=== status 010c0080
+SETUP_DATA_RX
+=== status 01080000
+SETUP_DATA_DONE ep=0
+oepint
+out ep=0 irq val=00008019
+control: complete
+SETUP received: [
+    0x80,
+    0x6,
+    0x2,
+    0x3,
+    0x9,
+    0x4,
+    0x0,
+    0x10,
+]
+control request: Request { direction: In, request_type: Standard, recipient: Device, request: 6, value: 770, index: 1033, length: 4096 }
+control: data_in write: [
+    0x2a,
+    0x3,
+    0x4b,
+    0x0,
+    0x4d,
+    0x0,
+    0x30,
+    0x0,
+    0x30,
+    0x0,
+    0x33,
+    0x0,
+    0x43,
+    0x0,
+    0x20,
+    0x0,
+    0x52,
+    0x0,
+    0x75,
+    0x0,
+    0x73,
+    0x0,
+    0x74,
+    0x0,
+    0x20,
+    0x0,
+    0x55,
+    0x0,
+    0x53,
+    0x0,
+    0x42,
+    0x0,
+    0x20,
+    0x0,
+    0x74,
+    0x0,
+    0x65,
+    0x0,
+    0x73,
+    0x0,
+    0x74,
+    0x0,
+]
+write ep=EndpointAddress(128) data=[
+    0x2a,
+    0x3,
+    0x4b,
+    0x0,
+    0x4d,
+    0x0,
+    0x30,
+    0x0,
+    0x30,
+    0x0,
+    0x33,
+    0x0,
+    0x43,
+    0x0,
+    0x20,
+    0x0,
+    0x52,
+    0x0,
+    0x75,
+    0x0,
+    0x73,
+    0x0,
+    0x74,
+    0x0,
+    0x20,
+    0x0,
+    0x55,
+    0x0,
+    0x53,
+    0x0,
+    0x42,
+    0x0,
+    0x20,
+    0x0,
+    0x74,
+    0x0,
+    0x65,
+    0x0,
+    0x73,
+    0x0,
+    0x74,
+    0x0,
+]
+write ep=EndpointAddress(128): diepctl 00028000 ftxfsts 00000010
+write ep=EndpointAddress(128) wait for prev: ready
+write ep=EndpointAddress(128) wait for fifo: ready
+write done ep=EndpointAddress(128)
+control: data_in waiting for status
+read start len=0
+in ep=0 irq val=000020c1
+=== status 01250000
+OUT_DATA_RX ep=0 len=0
+=== status 01270000
+OUT_DATA_DONE ep=0
+read ep=EndpointAddress(0) done len=0
+control: complete
+
+ADC retained [41444331, 00000003, 00005449, 00002291, 00000170, 0000fdb0, 00001062, 0000001e, 00000168, 000063bd, fffffdb8, fffffdc6, 00000f5e, 00000003, 000063a8, 000063ce, fffffd8c, fffffdf5, 00000000, ffffdc60, 00003e80, 00008515, 00000001, 003ff100]
+ADC init [494e4931, 00000003, 00000000, 0000fb68, 00001000, 00000000, 00000170, 0000fdb0, 00001062, 0000001e, 004c181c, ffffdbee, 00000003, 00000001, 00000000, 00000001]
+UI counters [00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+bus trace [89, 3f, 2e, f1, 28, 84, 80, 04, 02, 00, 00, 00, 57, 38, e1, 83, 23, 00, 57, 41, e7, cc, f3, 15, e0, 41, a1, 0e, 06, e5, 5e, 72]
+diagnostic [00000001, 40002440, 04808428, c01c3814, 00080000, 000001b3, 00000000, 0043c606, fffdfeb7, 4f54330a, 000500a0, 13702f81, 80008000, 00000001, 60080040, 00008000, 00000080, 00000000, 00000001, 00000008, 00000000, 00030007, 00000040, 00100040]
+Rust result: [52555354, 00000001, 00004000, 600d0002, 00000003, 00000000, 00000ac0, 00000000, 00000000, 00000000, 00000000, 00000000]
+PASS: Rust main completed and reset into the original bootloader

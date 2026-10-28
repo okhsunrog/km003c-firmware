@@ -82,6 +82,19 @@ fn full_signed_range() {
     assert_eq!(signed20(0xfffff0), -1);
     assert_eq!(signed20(0), 0);
 }
+
+#[test]
+fn reset_checks_identity_before_writing_por_bit() {
+    let mut device = Ina229::new(Mock::default());
+    device.reset().unwrap();
+    assert_eq!(device.release().writes, [[0, 0x80, 0]]);
+    let mut device = Ina229::new(Mock {
+        wrong_id: true,
+        ..Mock::default()
+    });
+    assert!(matches!(device.reset(), Err(Error::UnexpectedIdentity(_))));
+    assert!(device.release().writes.is_empty());
+}
 #[test]
 fn probe_before_writes_and_start_last() {
     let mut device = Ina229::new(Mock::default());

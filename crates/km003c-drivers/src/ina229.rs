@@ -126,6 +126,15 @@ impl<S: SpiDevice<u8>> Ina229<S> {
             device: self.read16(0x3f)?,
         })
     }
+    /// Reset the monitor to its documented power-on register defaults. The
+    /// caller must wait for reset completion before issuing further commands.
+    pub fn reset(&mut self) -> Result<(), Error<S::Error>> {
+        let id = self.identity()?;
+        if !id.is_ina229() {
+            return Err(Error::UnexpectedIdentity(id));
+        }
+        self.write16(0, 0x8000)
+    }
     pub fn configuration(&mut self) -> Result<Configuration, Error<S::Error>> {
         Ok(Configuration {
             config: self.read16(0)?,

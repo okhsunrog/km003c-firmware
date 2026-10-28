@@ -7,6 +7,7 @@ edition = "2024"
 default = []
 # Hardware candidates are opt-in until separately accepted on this board.
 measurement = []
+measurement-reset-test = ["measurement"]
 pd-capture = []
 # Manual visual checks need time for the operator to receive the prompt.
 # Exit/panic still request DFU immediately; this only extends the fallback.
