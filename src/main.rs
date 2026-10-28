@@ -140,7 +140,12 @@ fn main() -> ! {
 fn SysTick() {
     embassy_hc32::time_driver::systick_tick();
     static TICKS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-    if TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed) >= 90_000 {
+    let deadline = if cfg!(feature = "manual-ui-test") {
+        600_000
+    } else {
+        90_000
+    };
+    if TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed) >= deadline {
         unsafe {
             for (i, address) in [
                 0x400c0008usize,

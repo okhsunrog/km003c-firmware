@@ -1,0 +1,21 @@
+{
+  "features": [
+    "measurement",
+    "manual-ui-test"
+  ],
+  "fallback_seconds": 600,
+  "adc_samples": 807,
+  "spi_error": false,
+  "usb_echo_all_nine_sizes_passed": true,
+  "button_press_counts": {
+    "Exit": 12,
+    "OK": 20,
+    "Left": 22,
+    "Right": 16
+  },
+  "return": "Exit held; normal DFU status, 807 samples at 4 Hz before 600-second deadline",
+  "owner_visual_result": "Full-screen diagonal band disappeared; slight occasional tearing remains inside the updated rectangle.",
+  "stock_restored": "2.0.7, full 456896-byte readback",
+  "bootloader_unchanged": true,
+  "image_sha256": "65df0280fe3ac3e483f4865bb51182962b650d93651b9e5e40feba32205abc95"
+}

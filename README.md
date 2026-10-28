@@ -8,8 +8,9 @@ The 240×240 ST7789-compatible panel shows an `embedded-graphics` diagnostic UI.
 Button rows highlight and count presses; concurrent byte-for-byte USB echo
 passed for 1, 23, 64, 7, 64, 17, 128, 256 and 512 bytes.
 The image returns to native DFU about 90 seconds after startup. Holding Exit
-for two seconds also requests DFU; this second path has not been separately
-tested.
+for two seconds also requests DFU; this path is now verified on hardware.
+For manual visual checks, `--features measurement,manual-ui-test` extends only
+the fallback deadline to ten minutes so the operator has time to respond.
 
 The initial device tests restored the original 1.9.9 application. Subsequent
 ADC tests used stock 2.0.7 and restored that same version with full application
@@ -40,7 +41,9 @@ Inputs have pull-ups and are sampled every 20 ms with repeated-sample debounce.
 The UI composes changed rows in a 14.7 KB RAM tile and uploads each row as a
 continuous RGB565 block. It does not clear the screen on button changes. ADC
 text is updated only when its displayed string changes; no heap is used.
-This is not TE/VSYNC synchronization. Retention RAM contains
+The owner confirmed the full-screen band disappeared; intermittent tearing
+inside the updated row remains. This is not TE/VSYNC synchronization.
+Retention RAM contains
 the debounced mask at `0x200f0d20` and four press counters at `0x200f0d24`
 onward.
 The lightning-marked button's electrical CC behavior is not established by this

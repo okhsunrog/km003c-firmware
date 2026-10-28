@@ -22,3 +22,15 @@ Stock 2.0.7 was restored with full 456896-byte readback and unchanged loader.
 The upload reused the previously verified stock backup, checking live model,
 hardware and metadata instead of acquiring two more full APP reads. Readback
 of the newly written custom image and stock restoration was retained.
+
+## Manual visual check
+
+A second run with `measurement,manual-ui-test` extended the fallback to ten
+minutes. The owner confirmed that the full-screen diagonal band disappeared,
+but slight intermittent tearing remained inside the changed rectangle. This is
+partial improvement, not tear-free acceptance. No TE synchronization was added.
+
+Retained counts were Exit 12 / OK 20 / Left 22 / Right 16. The owner held Exit,
+returning to native DFU after 807 ADC samples, well before the 600-second fallback.
+USB echo passed all nine sizes again. Stock 2.0.7 was restored with full readback
+and unchanged loader. Exact artifacts are in `manual/`.
