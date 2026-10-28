@@ -18,6 +18,8 @@ image and `tools/usb_echo.py` remain available for USB transport regression test
 | `status` | Reply with `km003c-cdc-v1`, also used for host resynchronization |
 | `stream on` | ADC records every 250 ms |
 | `stream off` | Stop ADC records |
+| `pd start 1` / `pd start 2` | Continuous interrupt-rearmed receive |
+| `pd stop` | Stop continuous receive and publish counters |
 | `pd 1` | One passive burst from CMP1_INP1 / PA0 |
 | `pd 2` | One passive burst from CMP1_INP2 / PA1 |
 | `loader` | Request native DFU and reset |
@@ -54,7 +56,9 @@ about 12.75 µs after the last edge at the configured 12 MHz timer clock.
 - `pd_capture_error`: timeout, DMA error, full buffer or count mismatch.
 - `pd_registers`: post-cancellation snapshot in the order below.
 
-`pd_packet.ms` is processing uptime, **not a hardware wire timestamp**. The raw
+Legacy `pd_packet.ms` is processing uptime, **not a hardware wire timestamp**.
+Buffered builds use `end_us`, IRQ-observed end uptime with 1 ms resolution.
+The raw
 first capture has no preceding edge and is excluded from decoding. Measured
 interval groups were 15/19/23 and 35/39/43 ticks; half-bit 20 and tolerance 5
 keep short/long windows disjoint and decode the measured Request with valid CRC.
@@ -63,12 +67,13 @@ The register snapshot contains CMP CTRL/VLTSEL/OUTMON, packed TMRA BCSTRL/H,
 CNTER, CMPAR3, DCU DATA0, DMA MONDTCTL2, both AOS TMRA trigger selectors, and DMA
 INTMASK1/INTCLR0. Reading these registers does not acknowledge capture flags.
 
-This remains a **single-burst receiver with blind intervals**. Processing and
-raw USB output occur before rearming; GoodCRC/Accept/PS_RDY can therefore be
-missed even when the first PPS Request passes CRC. Repeated commands are not a
-continuous lossless capture. A buffered acquisition/processing split is the next
-step. The current observation confirms PA0/CMP1_INP1 carries PD on the connected
-cable orientation; it does not establish the other orientation's physical map.
+The original `pd 1` / `pd 2` interface remains single-burst with blind intervals
+while processing and uploading raw data. The additional
+`pd start 1` / `pd start 2`
+commands now use interrupt-rearmed double buffering, a separate priority decoder
+and queued JSON formatting. See [buffered receiver](pd-buffered.md) for ownership,
+loss counters, scheduling and accepted hardware results. This still does not
+claim losslessness under arbitrary traffic, IRQ masking or host backpressure.
 
 ## Host recording
 
@@ -77,6 +82,8 @@ uv run tools/usb_telemetry.py --seconds 40 --pd 1 --repeat-pd \
   --output capture.ndjson
 ```
 
+`--pd-continuous --pd 1` starts buffered capture and stops it after recording.
+`--pause-read 10` deliberately delays host reads for a backpressure check.
 `--repeat-pd` repeats the selected burst command every 16 seconds. `--loader`
 returns to native DFU after recording. Supply `--libusb PATH` if the system
 cannot discover its native library. The tool checks the product string, detaches

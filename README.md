@@ -75,8 +75,9 @@ samples from POR defaults with valid factory correction. Whole-board cold-start
 acceptance is still pending. [Latest evidence](hardware/cold-adc/README.md),
 [earlier ADC evidence](hardware/adc-207/README.md) and
 [ADC/PD bring-up](docs/adc-pd.md) distinguish these checks.
-Wide-range current remains untested. Passive single-burst PD reception has
-captured a CRC-valid PPS Request; continuous acquisition remains open.
+Wide-range current remains untested. Interrupt-rearmed passive PD reception now
+captures complete PPS request/response cycles, including GoodCRC.
+[Buffering and limits](docs/pd-buffered.md) describe bounded queues and counters.
 Both features remain disabled by default.
 
 The [HC32 HAL](https://github.com/okhsunrog/hc32f460-embassy-rs) provides PAC,
@@ -113,8 +114,9 @@ self-powered operation and general disconnect/reconnect acceptance remain open.
 
 `--features cdc-telemetry,pd-capture,manual-ui-test` replaces the binary echo
 protocol with measurement and PD diagnostics over the same USB CDC interface.
-Send `stream on` for V/I/temperature/calibration, `pd 1` or `pd 2` for a passive
-burst, and `loader` to request DFU. Commands are LF-terminated ASCII; replies and
+Send `stream on` for V/I/temperature/calibration, `pd start 1` / `pd stop` for
+continuous passive PD, `pd 1` / `pd 2` for a raw burst, and `loader` for DFU.
+Commands are LF-terminated ASCII; replies and
 records are NDJSON. The meter does not wait for a USB reader. See the
 [protocol and host recorder](docs/cdc-telemetry.md) and
 [stock/physical evidence](hardware/pd-cdc/README.md).

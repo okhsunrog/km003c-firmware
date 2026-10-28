@@ -10,6 +10,8 @@ mod display;
 pub mod measurement;
 #[cfg(feature = "orientation")]
 mod orientation;
+#[cfg(all(feature = "pd-capture", feature = "cdc-telemetry"))]
+mod pd_buffered;
 #[cfg(feature = "pd-capture")]
 pub mod pd_capture;
 mod retention_log;
@@ -126,6 +128,8 @@ fn main() -> ! {
         .unwrap()
     };
     let hclk = clocks.hclk;
+    assert_eq!(hclk, 192_000_000);
+    log::info!("Clock readback: {clocks:?}");
     embassy_hc32::time_driver::init(cp.SYST, hclk).unwrap();
     static EXECUTOR: static_cell::StaticCell<embassy_executor::Executor> =
         static_cell::StaticCell::new();
@@ -142,7 +146,10 @@ fn main() -> ! {
         #[cfg(feature = "cdc-telemetry")]
         s.spawn(telemetry::measurements().unwrap());
         #[cfg(all(feature = "cdc-telemetry", feature = "pd-capture"))]
-        s.spawn(telemetry::captures().unwrap());
+        {
+            telemetry::start_capture_task();
+            s.spawn(telemetry::pd_reports().unwrap());
+        }
     })
 }
 

@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-28",
+  "device": "KM003C HW2.1",
+  "load": "Pixel 8 Pro PPS",
+  "cpu_hclk_hz": 192000000,
+  "pclk1_hz": 96000000,
+  "timer_hz": 12000000,
+  "normal_seconds": 40,
+  "normal": {
+    "packets_delivered": 36,
+    "message_counts": {
+      "Request": 6,
+      "GoodCRC": 18,
+      "Accept": 6,
+      "PS_RDY": 6
+    },
+    "crc_independently_valid": true,
+    "adc_records": 161,
+    "cdc_dropped": 0,
+    "capture_stats": {
+      "type": "pd_stats",
+      "frames": 36,
+      "overruns": 0,
+      "held_overruns": 0,
+      "noise": 0,
+      "full": 0,
+      "dma_errors": 0,
+      "mismatches": 0,
+      "stop_faults": 0,
+      "max_handler_cycles": 725,
+      "decode_errors": 0,
+      "sync_errors": 18
+    }
+  },
+  "backpressure_seconds": 25,
+  "host_read_pause_seconds": 10,
+  "backpressure": {
+    "packets_delivered": 12,
+    "message_counts": {
+      "Request": 2,
+      "GoodCRC": 6,
+      "Accept": 2,
+      "PS_RDY": 2
+    },
+    "crc_independently_valid": true,
+    "adc_records": 68,
+    "cdc_dropped": 96,
+    "capture_stats": {
+      "type": "pd_stats",
+      "frames": 24,
+      "overruns": 0,
+      "held_overruns": 0,
+      "noise": 0,
+      "full": 0,
+      "dma_errors": 0,
+      "mismatches": 0,
+      "stop_faults": 0,
+      "max_handler_cycles": 725,
+      "decode_errors": 0,
+      "sync_errors": 12
+    }
+  },
+  "dma_buffers": 2,
+  "halfwords_per_buffer": 860,
+  "normal_return_and_unchanged_loader": true,
+  "stock_restored": false,
+  "remaining_test_fallback_seconds": 600,
+  "hashes": {
+    "backpressure.ndjson": "48e8ec50ef8debd7b43548033b3480782953574f2a789dd042905b4d6f1a2434",
+    "hardware-run.log": "e717f9463dfba15347a04c63373414eae79bdb62fb9517a3fff698142f244a39",
+    "initial-loss.ndjson": "ec924d10e0d0582f127c548cd3b067444bd64890af12b497108e9ce122c1286e",
+    "intermediate-loss.ndjson": "b68b08973f66addcee9332325eca2f9980bfa582212ff853a8f312c30fc1af73",
+    "marker-after.bin": "899469ef7fe1d4bdbc032d42f58504091f128e1cae3e32d8af66204eefb2f9bf",
+    "pixel.ndjson": "303c8a502280b02434bbb1a2863df07ca61f3f996ad96935b180c6fb4575f38e",
+    "retention.log": "9dd99ebbb23225b6156477f3a9e9403c0902c66e3d19b6cd80b680f9aac62d3e",
+    "tested-image.bin": "f3c1269e88f48996587756d5a4f20dbc1de0ef6a73082366aef00be3648d84cf",
+    "restart.log": "e0e0ae9fca661f4a8b54b92e36722d6aa8ef7e4c4ae8c09076a25d9de55304a8"
+  },
+  "restarted_existing_image_without_write": true
+}

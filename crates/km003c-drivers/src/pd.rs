@@ -111,6 +111,10 @@ impl Decoder {
             expected: 0,
         })
     }
+    /// Whether a SOP has been recognized and a packet is being assembled.
+    pub fn in_packet(&self) -> bool {
+        self.sop.is_some()
+    }
     pub fn reset(&mut self) {
         self.pending_half = false;
         self.window = 0;

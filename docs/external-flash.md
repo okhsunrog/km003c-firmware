@@ -1,11 +1,15 @@
 # External NOR flash: verified access and limits
 
 The external serial NOR shares HC32 QSPI with the display. Native firmware uses
-an approximately 4 MiB storage layout; the factory settings-A copy is at offset
+a 4 MiB storage layout; the owner also reports `ROM 4MB` in the stock device
+information menu. This refers to external storage rather than the MCU
+application flash. The MCU has 512 KiB internal flash; the factory settings-A
+copy is at offset
 `0x3ff100`. The tested board returned legacy command-90 manufacturer/device ID
 `85 15`. Manufacturer `85` is consistent with Puya's documented REMS response.
-The exact part, voltage suffix, revision and capacity have not been established
-from JEDEC/SFDP or a readable package marking. Do not assign a specific P25Q32
+The menu confirms the advertised 4 MB storage size; exact part, voltage suffix,
+revision and independent capacity identification still require JEDEC/SFDP or
+a readable package marking. Do not assign a specific P25Q32
 variant from this legacy ID alone.
 
 The custom firmware currently supports a narrow **read-only startup path**:

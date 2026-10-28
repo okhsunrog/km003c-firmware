@@ -85,19 +85,43 @@ def main() -> None:
         action="store_true",
         help="Repeat the selected 15-second capture every 16 seconds",
     )
+    parser.add_argument(
+        "--pd-continuous",
+        action="store_true",
+        help="Use interrupt-rearmed double buffering with --pd",
+    )
+    parser.add_argument(
+        "--pause-read",
+        type=float,
+        default=0,
+        help="Delay host reads to test backpressure",
+    )
     args = parser.parse_args()
+    if args.pd_continuous and not args.pd:
+        parser.error("--pd-continuous requires --pd")
     counts: dict[str, int] = {}
     invalid = 0
     with connect(args.libusb, args.wait) as device, args.output.open("w") as output:
         device.write(0x01, b"status\nstream on\n", timeout=2000)
         if args.pd:
-            device.write(0x01, f"pd {args.pd}\n".encode(), timeout=2000)
+            device.write(
+                0x01,
+                f"pd {'start ' if args.pd_continuous else ''}{args.pd}\n".encode(),
+                timeout=2000,
+            )
         next_pd = time.monotonic() + 16
         synchronized = False
         pending = bytearray()
         deadline = time.monotonic() + args.seconds
+        if args.pause_read:
+            time.sleep(args.pause_read)
         while time.monotonic() < deadline:
-            if args.repeat_pd and args.pd and time.monotonic() >= next_pd:
+            if (
+                args.repeat_pd
+                and not args.pd_continuous
+                and args.pd
+                and time.monotonic() >= next_pd
+            ):
                 device.write(0x01, f"pd {args.pd}\n".encode(), timeout=2000)
                 next_pd = time.monotonic() + 16
             try:
@@ -127,7 +151,43 @@ def main() -> None:
                 counts[kind] = counts.get(kind, 0) + 1
             if len(pending) > 4096:
                 raise RuntimeError("CDC record exceeds limit")
-        device.write(0x01, b"stream off\n", timeout=2000)
+        device.write(
+            0x01,
+            b"pd stop\nstream off\n" if args.pd_continuous else b"stream off\n",
+            timeout=2000,
+        )
+        if args.pd_continuous:
+            # Read the final cumulative counters and acknowledgement. There may
+            # still be queued records after the last timed read, so retain the
+            # partial line rather than discarding it at the session boundary.
+            stop_deadline = time.monotonic() + 3
+            stopped = False
+            while time.monotonic() < stop_deadline:
+                try:
+                    pending.extend(device.read(0x82, 64, timeout=500))
+                except usb.core.USBTimeoutError:
+                    continue
+                while b"\n" in pending:
+                    line, _, rest = pending.partition(b"\n")
+                    pending = bytearray(rest)
+                    if not line.strip():
+                        continue
+                    try:
+                        record = json.loads(line)
+                        kind = record["type"]
+                    except (ValueError, KeyError, TypeError):
+                        invalid += 1
+                        continue
+                    output.write(json.dumps(record, separators=(",", ":")) + "\n")
+                    output.flush()
+                    counts[kind] = counts.get(kind, 0) + 1
+                    if kind == "reply" and record.get("message") == "PD stopped":
+                        stopped = True
+                        # Counters are formatted by a separate task. Allow its
+                        # final snapshot to follow the control acknowledgement.
+                        stop_deadline = min(stop_deadline, time.monotonic() + 0.3)
+            if not stopped:
+                raise RuntimeError("Missing PD stop acknowledgement")
         if args.loader:
             device.write(0x01, b"loader\n", timeout=2000)
     print(json.dumps({"records": counts, "invalid_lines": invalid}), file=sys.stderr)
@@ -136,7 +196,9 @@ def main() -> None:
     if invalid:
         raise RuntimeError("Malformed CDC records received")
     if args.pd and not (
-        counts.get("pd_summary")
+        counts.get("pd_packet")
+        or counts.get("pd_stats")
+        or counts.get("pd_summary")
         or counts.get("pd_capture_error")
         or counts.get("pd_init_error")
     ):

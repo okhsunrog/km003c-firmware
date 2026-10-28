@@ -24,16 +24,16 @@ const DCU: usize = 0x40052000;
 const WAITING: u32 = u32::MAX;
 static END: AtomicU32 = AtomicU32::new(WAITING);
 static WAKER: AtomicWaker = AtomicWaker::new();
-fn read8(address: usize) -> u8 {
+pub(crate) fn read8(address: usize) -> u8 {
     unsafe { (address as *const u8).read_volatile() }
 }
-fn write8(address: usize, value: u8) {
+pub(crate) fn write8(address: usize, value: u8) {
     unsafe { (address as *mut u8).write_volatile(value) }
 }
-fn read16(address: usize) -> u16 {
+pub(crate) fn read16(address: usize) -> u16 {
     unsafe { (address as *const u16).read_volatile() }
 }
-fn write16(address: usize, value: u16) {
+pub(crate) fn write16(address: usize, value: u16) {
     unsafe { (address as *mut u16).write_volatile(value) }
 }
 fn read32(address: usize) -> u32 {
@@ -58,7 +58,7 @@ pub enum Error {
     BufferFull,
     CountMismatch { events: usize, transferred: usize },
 }
-fn stop_events() {
+pub(crate) fn stop_events() {
     // Disable edge events and the physical VCOUT port, retain internal comparator
     // output only. Then stop the timer and disable/clear overflow IRQ state.
     write16(CMP, read16(CMP) & !0x1060);
@@ -74,6 +74,11 @@ impl Drop for StopEvents {
 
 #[interrupt]
 fn INT008() {
+    #[cfg(feature = "cdc-telemetry")]
+    if crate::pd_buffered::enabled() {
+        crate::pd_buffered::on_interrupt(0);
+        return;
+    }
     if read8(TMRA + 0x81) & 0x40 != 0 {
         stop_events();
         END.store(read32(DCU + 8) & 0xffff, Ordering::Release);
@@ -82,10 +87,20 @@ fn INT008() {
 }
 #[interrupt]
 fn INT017() {
+    #[cfg(feature = "cdc-telemetry")]
+    if crate::pd_buffered::enabled() {
+        crate::pd_buffered::on_interrupt(1);
+        return;
+    }
     dma::on_interrupt(Unit::Dma1);
 }
 #[interrupt]
 fn INT018() {
+    #[cfg(feature = "cdc-telemetry")]
+    if crate::pd_buffered::enabled() {
+        crate::pd_buffered::on_interrupt(2);
+        return;
+    }
     dma::on_interrupt(Unit::Dma1);
 }
 

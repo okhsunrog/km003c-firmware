@@ -1,0 +1,4 @@
+   Compiling km003c-bringup-host v0.1.0 (/home/okhsunrog/tmp_zfs/codex_tmp/km003c-rust-bringup/host)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.52s
+     Running `/home/okhsunrog/tmp_zfs/codex_tmp/km003c-rust-bringup/host/target/debug/km003c-bringup-host --start-existing`
+Started existing verified custom image; no flash writes

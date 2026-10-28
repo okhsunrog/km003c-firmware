@@ -3,9 +3,10 @@
 Implementation and hardware tests dated 2026-10-28. INA229 reads are now
 confirmed on HW2.1 alongside USB/display operation. Two 90-second runs produced
 720 samples without SPI errors. [Evidence](../hardware/adc-207/README.md) records
-stock 2.0.7 comparisons and restoration. Single-burst passive PD now captures
-a CRC-valid PPS Request on PA0;
-continuous acquisition and the other cable orientation remain unverified.
+stock 2.0.7 comparisons and restoration. Passive PD on PA0 now captures
+complete PPS request/response cycles using
+interrupt-rearmed double buffering. The other cable orientation remains
+unverified. See [buffered reception](pd-buffered.md).
 
 ## Measurement
 
@@ -128,11 +129,12 @@ before assuming a decoder configuration. The native divider is PCLK1/8; our
 The first edge starts the timer and is excluded from decoding. Code 0x20 is the
 native DAC setting, not a verified voltage threshold for this board.
 
-This is a single-burst implementation: packets during processing/rearm can be
-lost. It does not claim a continuous, lossless analyzer. Timeout, DMA errors,
-full buffers, count mismatch, timing, invalid symbols, length/EOP and CRC failures
-are explicit. A permanently wedged DMA can stall cancellation while protecting
-borrowed memory. Observe raw intervals and error counts during acceptance.
+`Receiver::capture` retains its single-burst interface for raw diagnostics.
+[Buffered reception](pd-buffered.md) adds two permanent DMA slots, immediate IRQ
+rearm, an interrupt-executor decoder and a separate thread formatter. Full-buffer,
+DMA errors, DCU/count mismatch, noise, overrun and decode/synchronization counters
+are explicit. No buffer still owned by DMA or its consumer is reused.
+This is bounded buffering, not an unconditional lossless-analyzer claim.
 
 ## Offline evidence and checks
 

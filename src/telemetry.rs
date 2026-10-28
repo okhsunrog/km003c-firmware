@@ -14,7 +14,14 @@ static ONLINE: AtomicBool = AtomicBool::new(false);
 static STREAM: AtomicBool = AtomicBool::new(false);
 static DROPPED: AtomicU32 = AtomicU32::new(0);
 #[cfg(feature = "pd-capture")]
-static PD: Channel<CriticalSectionRawMutex, u8, 1> = Channel::new();
+#[derive(Clone, Copy)]
+enum PdCommand {
+    Once(u8),
+    Start(u8),
+    Stop,
+}
+#[cfg(feature = "pd-capture")]
+static PD: Channel<CriticalSectionRawMutex, PdCommand, 4> = Channel::new();
 
 pub fn emit(line: Line) {
     if ONLINE.load(Ordering::Relaxed) && OUT.try_send(line).is_err() {
@@ -40,10 +47,25 @@ fn command(text: &str) {
         #[cfg(feature = "pd-capture")]
         "pd 1" | "pd 2" => {
             let input = if text.trim() == "pd 1" { 1 } else { 2 };
-            if PD.try_send(input).is_err() {
+            if PD.try_send(PdCommand::Once(input)).is_err() {
                 reply("PD busy");
             } else {
                 reply("PD capture queued");
+            }
+        }
+        #[cfg(feature = "pd-capture")]
+        "pd start 1" | "pd start 2" => {
+            let input = if text.trim() == "pd start 1" { 1 } else { 2 };
+            if PD.try_send(PdCommand::Start(input)).is_err() {
+                reply("PD busy");
+            } else {
+                reply("PD start queued");
+            }
+        }
+        #[cfg(feature = "pd-capture")]
+        "pd stop" => {
+            if PD.try_send(PdCommand::Stop).is_err() {
+                reply("PD busy");
             }
         }
         // Explicit command, in addition to the physical Exit recovery path.
@@ -80,7 +102,10 @@ pub async fn receive<'a>(mut receiver: Receiver<'a, Driver<'a>>) {
         ONLINE.store(false, Ordering::Relaxed);
         OUT.clear();
         #[cfg(feature = "pd-capture")]
-        PD.clear();
+        {
+            PD.clear();
+            let _ = PD.try_send(PdCommand::Stop);
+        }
     }
 }
 pub async fn send<'a>(mut sender: Sender<'a, Driver<'a>>) {
@@ -157,17 +182,244 @@ pub async fn measurements() {
 }
 
 #[cfg(feature = "pd-capture")]
+static PD_EXECUTOR: embassy_executor::InterruptExecutor =
+    embassy_executor::InterruptExecutor::new();
+#[cfg(feature = "pd-capture")]
+use embassy_hc32::pac::interrupt;
+#[cfg(feature = "pd-capture")]
+#[interrupt]
+fn INT030() {
+    unsafe {
+        PD_EXECUTOR.on_interrupt();
+    }
+}
+#[cfg(feature = "pd-capture")]
+pub fn start_capture_task() {
+    // INT030 has no hardware event producer (selector 0x1ff). Its sole
+    // producer is Embassy's NVIC pender. Timer/DMA=5, decoder=7, USB=8.
+    unsafe {
+        (0x4005105cusize.wrapping_add(30 * 4) as *mut u32).write_volatile(0x1ff);
+        cortex_m::Peripherals::steal()
+            .NVIC
+            .set_priority(interrupt::INT030, 0x70);
+    }
+    PD_EXECUTOR
+        .start(interrupt::INT030)
+        .spawn(captures().unwrap());
+}
+#[cfg(feature = "pd-capture")]
+#[derive(Clone, Copy)]
+enum PdReport {
+    Event {
+        event: km003c_drivers::pd::Event,
+        burst: u32,
+        input: u8,
+        end_us: u64,
+    },
+    Summary {
+        burst: u32,
+        input: u8,
+        count: usize,
+        valid: u32,
+        errors: u32,
+        sync: u32,
+    },
+    Stats {
+        capture: crate::pd_buffered::Stats,
+        errors: u32,
+        sync: u32,
+    },
+    FrameError {
+        burst: u32,
+        code: u8,
+        count: usize,
+    },
+}
+#[cfg(feature = "pd-capture")]
+static REPORTS: Channel<CriticalSectionRawMutex, PdReport, 32> = Channel::new();
+#[cfg(feature = "pd-capture")]
+static DECODE_ERRORS: AtomicU32 = AtomicU32::new(0);
+#[cfg(feature = "pd-capture")]
+static SYNC_ERRORS: AtomicU32 = AtomicU32::new(0);
+#[cfg(feature = "pd-capture")]
+fn report(value: PdReport) {
+    if REPORTS.try_send(value).is_err() {
+        DROPPED.fetch_add(1, Ordering::Relaxed);
+    }
+}
+#[cfg(feature = "pd-capture")]
+fn pd_stats(r: &crate::pd_buffered::Buffered) {
+    report(PdReport::Stats {
+        capture: r.stats(),
+        errors: DECODE_ERRORS.load(Ordering::Relaxed),
+        sync: SYNC_ERRORS.load(Ordering::Relaxed),
+    });
+}
+#[cfg(feature = "pd-capture")]
+fn decode_pd(data: &[u16], burst: u32, input: u8, end_us: u64, summary: bool) {
+    let mut decoder = km003c_drivers::pd::Decoder::new(20, 5).unwrap();
+    let (mut valid, mut errors, mut sync) = (0, 0, 0);
+    for &tick in &data[data.len().min(1)..] {
+        let in_packet = decoder.in_packet();
+        match decoder.push_interval(tick) {
+            Ok(Some(event)) => {
+                valid += 1;
+                report(PdReport::Event {
+                    event,
+                    burst,
+                    input,
+                    end_us,
+                });
+            }
+            Err(_) if in_packet => errors += 1,
+            Err(_) => sync += 1,
+            _ => (),
+        }
+    }
+    if decoder.finish().is_err() {
+        errors += 1;
+    }
+    DECODE_ERRORS.fetch_add(errors, Ordering::Relaxed);
+    SYNC_ERRORS.fetch_add(sync, Ordering::Relaxed);
+    if summary || errors != 0 || valid == 0 {
+        report(PdReport::Summary {
+            burst,
+            input,
+            count: data.len(),
+            valid,
+            errors,
+            sync,
+        });
+    }
+}
+/// JSON/hex formatting belongs to the thread executor, after the fast decoder
+/// has released its DMA slot. Reports are bounded and never backpressure DMA.
+#[cfg(feature = "pd-capture")]
+#[embassy_executor::task]
+pub async fn pd_reports() {
+    loop {
+        let record = REPORTS.receive().await;
+        let mut line = Line::new();
+        match record {
+            PdReport::Event {
+                event,
+                burst,
+                input,
+                end_us,
+            } => match event {
+                km003c_drivers::pd::Event::Packet(packet) => {
+                    write!(line,"{{\"type\":\"pd_packet\",\"burst\":{burst},\"input\":{input},\"end_us\":{end_us},\"sop\":\"{:?}\",\"header\":{},\"wire_hex\":\"",packet.sop,packet.header()).unwrap();
+                    for byte in packet.wire() {
+                        write!(line, "{byte:02x}").unwrap();
+                    }
+                    writeln!(line, "\",\"crc\":{}}}", packet.crc).unwrap();
+                }
+                reset => {
+                    writeln!(
+                        line,
+                        "{{\"type\":\"pd_reset\",\"burst\":{burst},\"event\":\"{reset:?}\"}}"
+                    )
+                    .unwrap();
+                }
+            },
+            PdReport::Summary {
+                burst,
+                input,
+                count,
+                valid,
+                errors,
+                sync,
+            } => {
+                writeln!(line,"{{\"type\":\"pd_summary\",\"burst\":{burst},\"input\":{input},\"count\":{count},\"valid\":{valid},\"decode_errors\":{errors},\"sync_errors\":{sync},\"half_ticks\":20,\"tolerance\":5}}").unwrap();
+            }
+            PdReport::Stats {
+                capture: s,
+                errors,
+                sync,
+            } => {
+                writeln!(line,"{{\"type\":\"pd_stats\",\"frames\":{},\"overruns\":{},\"held_overruns\":{},\"noise\":{},\"full\":{},\"dma_errors\":{},\"mismatches\":{},\"stop_faults\":{},\"max_handler_cycles\":{},\"decode_errors\":{errors},\"sync_errors\":{sync}}}",s.frames,s.overruns,s.held_overruns,s.noise,s.full,s.dma_errors,s.mismatches,s.stop_faults,s.max_handler_cycles).unwrap();
+            }
+            PdReport::FrameError { burst, code, count } => {
+                writeln!(line,"{{\"type\":\"pd_frame_error\",\"burst\":{burst},\"code\":{code},\"count\":{count}}}").unwrap();
+            }
+        }
+        emit(line);
+    }
+}
+#[cfg(feature = "pd-capture")]
 #[embassy_executor::task]
 pub async fn captures() {
-    use crate::pd_capture::{Input, Receiver};
-    // PA0/PA1 are CMP1_INP1/2 (datasheet pin table). AnalogPin disables
-    // digital outputs/pull-ups. This does not assert a CC1/CC2 connector mapping.
-    let mut receiver = None;
-    let mut pins = None;
-    let mut buffer = [0u16; 860];
-    let mut burst = 0u32;
+    use crate::{
+        pd_buffered::Buffered,
+        pd_capture::{Input, Receiver},
+    };
+    use embassy_futures::select::{Either, select};
+    let (mut receiver, mut pins) = (None, None);
+    let mut streaming = false;
+    let mut input = 1;
+    let mut once = [0u16; 860];
+    let mut once_sequence = 0u32;
+    let mut stats_due = embassy_time::Instant::now();
     loop {
-        let input = PD.receive().await;
+        let command = if streaming {
+            let r: &Buffered = receiver.as_ref().unwrap();
+            match select(
+                PD.receive(),
+                embassy_time::with_timeout(embassy_time::Duration::from_secs(1), r.wait_ready()),
+            )
+            .await
+            {
+                Either::First(cmd) => Some(cmd),
+                Either::Second(_) => {
+                    let r: &mut Buffered = receiver.as_mut().unwrap();
+                    let meta = if let Some(frame) = r.frame() {
+                        let meta = frame.meta;
+                        // Release the DMA slot after a bounded 1720-byte copy,
+                        // before BMC/CRC work. The staging array is not a third
+                        // DMA target and is also reused by single-burst mode.
+                        once[..meta.count].copy_from_slice(frame.samples());
+                        Some(meta)
+                    } else {
+                        None
+                    };
+                    if let Some(m) = meta {
+                        if m.error == 0 {
+                            decode_pd(&once[..m.count], m.sequence, input, m.end_us, false);
+                        } else {
+                            report(PdReport::FrameError {
+                                burst: m.sequence,
+                                code: m.error,
+                                count: m.count,
+                            });
+                        }
+                    }
+                    if r.faulted() {
+                        streaming = false;
+                        reply("PD stopped on DMA quiescence fault");
+                    }
+                    if !streaming || embassy_time::Instant::now() >= stats_due {
+                        pd_stats(r);
+                        stats_due =
+                            embassy_time::Instant::now() + embassy_time::Duration::from_secs(1);
+                    }
+                    None
+                }
+            }
+        } else {
+            Some(PD.receive().await)
+        };
+        let Some(command) = command else {
+            continue;
+        };
+        if let PdCommand::Stop = command {
+            if let Some(r) = receiver.as_mut() {
+                r.stop();
+                pd_stats(r);
+            }
+            streaming = false;
+            reply("PD stopped");
+            continue;
+        }
         if pins.is_none() {
             pins = Some(unsafe {
                 [
@@ -176,15 +428,18 @@ pub async fn captures() {
                 ]
             });
         }
+        input = match command {
+            PdCommand::Once(i) | PdCommand::Start(i) => i,
+            PdCommand::Stop => unreachable!(),
+        };
         let selected = if input == 1 {
             Input::Cmp1Inp1
         } else {
             Input::Cmp1Inp2
         };
         if receiver.is_none() {
-            // Split DMA1 exactly once. No other task owns its resources.
             match unsafe { Receiver::new(selected, 0x20) } {
-                Ok(r) => receiver = Some(r),
+                Ok(r) => receiver = Some(Buffered::new(r)),
                 Err(e) => {
                     let mut line = Line::new();
                     writeln!(line, "{{\"type\":\"pd_init_error\",\"error\":\"{e:?}\"}}").unwrap();
@@ -194,87 +449,73 @@ pub async fn captures() {
             }
         }
         let r = receiver.as_mut().unwrap();
-        r.select_input(selected);
-        embassy_time::Timer::after_micros(20).await;
-        burst = burst.wrapping_add(1);
-        match r
-            .capture(&mut buffer, embassy_time::Duration::from_secs(15))
-            .await
-        {
-            Ok(count) => {
-                // Bound host backpressure; rearm is deliberately command-driven.
-                // Raw chunks preserve every interval, not only decoder successes.
-                for (index, chunk) in buffer[..count].chunks(32).enumerate() {
-                    let mut line = Line::new();
-                    write!(line,"{{\"type\":\"pd_raw\",\"burst\":{burst},\"input\":{input},\"count\":{count},\"offset\":{},\"ticks\":[",index*32).unwrap();
-                    for (i, tick) in chunk.iter().enumerate() {
-                        if i != 0 {
-                            line.push(',').unwrap();
-                        }
-                        write!(line, "{tick}").unwrap();
-                    }
-                    line.push_str("]}\n").unwrap();
-                    if embassy_time::with_timeout(
-                        embassy_time::Duration::from_millis(200),
-                        OUT.send(line),
-                    )
-                    .await
-                    .is_err()
-                    {
-                        DROPPED.fetch_add(1, Ordering::Relaxed);
-                        break;
-                    }
-                }
-                // Measured edge groups are 15/19/23 and 35/39/43 ticks.
-                // Five ticks accommodate the comparator/filter asymmetry while
-                // keeping the short and long timing windows disjoint.
-                let mut decoder = km003c_drivers::pd::Decoder::new(20, 5).unwrap();
-                let (mut valid, mut errors) = (0u32, 0u32);
-                // The first capture starts a cleared timer, so it has no
-                // preceding edge. Keep it in raw output, skip it in decoding.
-                for &tick in &buffer[count.min(1)..count] {
-                    match decoder.push_interval(tick) {
-                        Ok(Some(event)) => {
-                            valid += 1;
+        match command {
+            PdCommand::Start(_) => {
+                DECODE_ERRORS.store(0, Ordering::Relaxed);
+                SYNC_ERRORS.store(0, Ordering::Relaxed);
+                streaming = r.start(selected);
+                reply(if streaming {
+                    "PD continuous started"
+                } else {
+                    "PD failed to quiesce DMA"
+                });
+            }
+            PdCommand::Once(_) => {
+                streaming = false;
+                r.input(selected);
+                embassy_time::Timer::after_micros(20).await;
+                once_sequence = once_sequence.wrapping_add(1);
+                match r.once(&mut once).await {
+                    Ok(count) => {
+                        for (index, chunk) in once[..count].chunks(32).enumerate() {
                             let mut line = Line::new();
-                            match event {
-                                km003c_drivers::pd::Event::Packet(packet) => {
-                                    write!(line,"{{\"type\":\"pd_packet\",\"burst\":{burst},\"input\":{input},\"ms\":{},\"sop\":\"{:?}\",\"header\":{},\"wire_hex\":\"",embassy_time::Instant::now().as_millis(),packet.sop,packet.header()).unwrap();
-                                    for byte in packet.wire() {
-                                        write!(line, "{byte:02x}").unwrap();
-                                    }
-                                    writeln!(line, "\",\"crc\":{}}}", packet.crc).unwrap();
+                            write!(line,"{{\"type\":\"pd_raw\",\"burst\":{once_sequence},\"input\":{input},\"count\":{count},\"offset\":{},\"ticks\":[",index*32).unwrap();
+                            for (i, t) in chunk.iter().enumerate() {
+                                if i != 0 {
+                                    line.push(',').unwrap();
                                 }
-                                reset => {
-                                    writeln!(line,"{{\"type\":\"pd_reset\",\"burst\":{burst},\"event\":\"{reset:?}\"}}").unwrap();
-                                }
+                                write!(line, "{t}").unwrap();
                             }
-                            emit(line);
+                            line.push_str("]}\n").unwrap();
+                            if embassy_time::with_timeout(
+                                embassy_time::Duration::from_millis(200),
+                                OUT.send(line),
+                            )
+                            .await
+                            .is_err()
+                            {
+                                DROPPED.fetch_add(1, Ordering::Relaxed);
+                                break;
+                            }
                         }
-                        Err(_) => errors += 1,
-                        _ => (),
+                        decode_pd(
+                            &once[..count],
+                            once_sequence,
+                            input,
+                            embassy_time::Instant::now().as_micros(),
+                            true,
+                        );
+                    }
+                    Err(e) => {
+                        let mut line = Line::new();
+                        writeln!(
+                            line,
+                            "{{\"type\":\"pd_capture_error\",\"error\":\"{e:?}\"}}"
+                        )
+                        .unwrap();
+                        emit(line);
                     }
                 }
-                if decoder.finish().is_err() {
-                    errors += 1;
-                }
                 let mut line = Line::new();
-                writeln!(line,"{{\"type\":\"pd_summary\",\"burst\":{burst},\"input\":{input},\"count\":{count},\"valid\":{valid},\"decode_errors\":{errors},\"half_ticks\":20,\"tolerance\":5}}").unwrap();
+                writeln!(
+                    line,
+                    "{{\"type\":\"pd_registers\",\"values\":{:?}}}",
+                    r.diagnostics()
+                )
+                .unwrap();
                 emit(line);
             }
-            Err(e) => {
-                let mut line = Line::new();
-                writeln!(line,"{{\"type\":\"pd_capture_error\",\"burst\":{burst},\"input\":{input},\"error\":\"{e:?}\"}}").unwrap();
-                emit(line);
-            }
+            PdCommand::Stop => unreachable!(),
         }
-        let mut line = Line::new();
-        writeln!(
-            line,
-            "{{\"type\":\"pd_registers\",\"burst\":{burst},\"values\":{:?}}}",
-            r.diagnostics()
-        )
-        .unwrap();
-        emit(line);
     }
 }
