@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-28",
+  "hardware": "2.1",
+  "firmware_version": "rust-usb",
+  "original_firmware": "1.9.9",
+  "application_base": "0x4000",
+  "image_size": 64376,
+  "image_sha256": "a20306742de1249e3c2c4898724181e398bafaf3dacc962548ec0ed513cc48a8",
+  "installed_sha256": "726e1318bbb66ec0160d28096ec712b064fb4dfc34f20687a0b9b09dea79db26",
+  "backup_sha256": "1917eb2f05fb848c4f98323d17cbd6eacc3252dfc0f16bb479f8564e0311417a",
+  "bootloader_from4_sha256": "17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf",
+  "embassy_revision": "c2413d5994bbd8b7e6d5975fd49e6427cb903a02",
+  "hal_revision": "08a2603185d5acd05fda156e9cef468d47526be1",
+  "host_library_revision": "48b737f0dad01102b1204e9abb3040c199ab008b",
+  "compiler": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "usb": {
+    "revision": "3.30a",
+    "endpoints_including_ep0": 6,
+    "fifo_words": 308,
+    "rx_fifo_words": 64,
+    "extra_rx_fifo_words": 32,
+    "custom_product_enumerated": true,
+    "echo_sizes": [
+      1,
+      23,
+      64,
+      7,
+      64,
+      17,
+      128,
+      256,
+      512
+    ],
+    "all_echoes_matched": true,
+    "driver_source_patches": false,
+    "busy_polling": false
+  },
+  "checks": {
+    "two_matching_stock_backups": true,
+    "image_verified_before_execution": true,
+    "auto_return_to_native_dfu": true,
+    "return_status": "0x600d0002",
+    "stock_453828_bytes_restored": true,
+    "bootloader_unchanged": true
+  },
+  "later_transfer_timeout": {
+    "data_blocks_retried": false,
+    "usb_bus_reset_recovered": false,
+    "physical_power_cycle_with_exit_recovered_dfu": true,
+    "fresh_setup_restored_stock_with_full_readback": true,
+    "cause": "Not established; concurrent native-DFU string probing was removed from the portable observer.",
+    "last_reported_ciphertext_progress_bytes": 24480
+  },
+  "final_state": "Stock 1.9.9 application running after full readback verification",
+  "source_sha256": {
+    "src/main.rs": "ba1745cf4ac362d62fdb1f3ff8042d1bf029938116ae0c0a2ea708cd29e35cbd",
+    "src/usb.rs": "8ca0ae47e9b342f316c9177710a09bccb4246d0b23b2ee8ff124a81ad8a65f05",
+    "src/retention_log.rs": "9571ab28edf67f0fa8dc9279bd590d7ebb34ecaf5d2e21a622fb4b1dcf83bb8a",
+    "Cargo.toml": "cc21ba0d93930b4ddf950c55e25adc620b35331e80ce3430ff9f0dc70ae021ca",
+    "Cargo.lock": "267441916763eb2f4cdf29ef1f1f877977b8bf18613f4d793a5801fbb2736ec0",
+    "memory.x": "690e9a8d5f640c31e226194c0a1bf9a3c5d670f2b0017635dbf913938a7b055a",
+    "metadata.x": "01a2582c4822b8fcf9e9874d5e02aa635abc559aad8ee59101dd50d745cdbc3e"
+  }
+}

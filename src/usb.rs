@@ -1,10 +1,15 @@
 use embassy_hc32::{intc, pac};
 use embassy_usb_synopsys_otg::{Config, Driver, OtgInstance, PhyType, StateStorage, otg_v1::Otg};
 use pac::interrupt;
-static STATE: StateStorage<6> = StateStorage::new();
+static STATE: StateStorage<6> =
+    StateStorage::new(embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex::new());
 
 #[pac::interrupt]
 fn INT000() {
+    unsafe {
+        let p = 0x200f0fd8 as *mut u32;
+        p.write_volatile(p.read_volatile().wrapping_add(1));
+    }
     unsafe {
         embassy_usb_synopsys_otg::on_interrupt(
             Otg::from_ptr(0x400c0000 as *mut _),
@@ -53,7 +58,7 @@ pub unsafe fn driver(buffer: &'static mut [u8]) -> (Driver<'static>, intc::Route
         wait(0x400c0010, 1, false);
         cortex_m::asm::delay(1000);
         // Internal FS PHY and forced device mode; turnaround at HCLK >= 32MHz.
-        w(0x400c000c as *mut u32, (1 << 30) | (1 << 6) | (5 << 10));
+        w(0x400c000c as *mut u32, (1 << 30) | (1 << 6) | (9 << 10));
         wait(0x400c0014, 1, false);
         // Match the native loader's documented-by-disassembly B-session setting.
         w(
@@ -66,9 +71,13 @@ pub unsafe fn driver(buffer: &'static mut [u8]) -> (Driver<'static>, intc::Route
             regs: Otg::from_ptr(0x400c0000 as *mut _),
             state: STATE.as_state(),
             fifo_depth_words: 308,
+            tx_fifo_count: 6,
             phy_type: PhyType::InternalFullSpeed,
-            extra_rx_fifo_words: 0,
-            calculate_trdt_fn: |_| 5,
+            // Account for RX status/setup overhead in addition to OUT payloads.
+            // EP0 + CDC OUT contribute 32 words; this yields the native 64-word
+            // RX allocation. A zero reserve reproducibly stalled enumeration.
+            extra_rx_fifo_words: 32,
+            calculate_trdt_fn: |_| 9,
         };
         (Driver::new(buffer, instance, Config::default()), route)
     }

@@ -4,6 +4,7 @@
 use core::{panic::PanicInfo, ptr::write_volatile};
 use cortex_m_rt::{entry, exception};
 
+mod retention_log;
 mod usb;
 const MARKER: *mut u32 = 0x200f_0fc0 as *mut u32;
 const BOOT_REQUEST: *mut u32 = 0x200f_0ff0 as *mut u32;
@@ -60,6 +61,7 @@ core::arch::global_asm!(
 );
 
 fn return_to_loader(status: u32) -> ! {
+    cortex_m::interrupt::disable();
     unsafe {
         write_volatile(MARKER.add(3), status);
         write_volatile(BOOT_REQUEST, 0x1234_5678);
@@ -70,21 +72,36 @@ fn return_to_loader(status: u32) -> ! {
 
 #[entry]
 fn main() -> ! {
+    retention_log::init();
     let _device = embassy_hc32::pac::Peripherals::take().unwrap();
     unsafe {
+        for i in 0..12 {
+            write_volatile(MARKER.add(i), 0);
+        }
         write_volatile(MARKER, 0x5255_5354);
         write_volatile(MARKER.add(1), 1);
         write_volatile(MARKER.add(2), 0x0000_4000);
     }
     let mut cp = cortex_m::Peripherals::take().unwrap();
     use embassy_hc32::clocks::{self, Config, Divider, Dividers, Mpll};
+    unsafe {
+        write_volatile(0x40050804 as *mut u32, 0x77);
+        write_volatile(0x40050800 as *mut u32, 0x22222222);
+        write_volatile(0x40050804 as *mut u32, 0x76);
+    }
     let clocks = unsafe {
         clocks::configure(Config {
-            mpll: Mpll::new(1, 24, [2, 4, 8]).unwrap(),
+            mpll: Mpll::new(2, 48, [2, 4, 8]).unwrap(),
             dividers: Dividers {
-                hclk: Divider::Div4,
-                exclk: Divider::Div8,
-                pclk: [Divider::Div4; 5],
+                hclk: Divider::Div1,
+                exclk: Divider::Div4,
+                pclk: [
+                    Divider::Div2,
+                    Divider::Div2,
+                    Divider::Div4,
+                    Divider::Div4,
+                    Divider::Div2,
+                ],
             },
         })
         .unwrap()
@@ -124,6 +141,18 @@ fn SysTick() {
                 0x400c0040,
                 0x40054024,
                 0x40054100,
+                0x400c0b00,
+                0x400c0b08,
+                0x400c0b10,
+                0x400c0900,
+                0x400c0908,
+                0x400c0910,
+                0x400c0810,
+                0x400c0814,
+                0x400c0818,
+                0x400c081c,
+                0x400c0024,
+                0x400c0028,
             ]
             .into_iter()
             .enumerate()
@@ -159,23 +188,36 @@ async fn usb_task() {
     let mut msos = [0; 0];
     let mut builder =
         embassy_usb::Builder::new(driver, config, &mut cd, &mut bd, &mut msos, &mut control);
-    let mut serial = embassy_usb::class::cdc_acm::CdcAcmClass::new(&mut builder, &mut state, 64);
+    let serial = embassy_usb::class::cdc_acm::CdcAcmClass::new(&mut builder, &mut state, 64);
     let mut device = builder.build();
     unsafe {
         write_volatile(MARKER.add(4), 3);
     }
-    let echo = async {
+    let (mut sender, mut receiver) = serial.split();
+    let queue = embassy_sync::channel::Channel::<
+        embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
+        ([u8; 64], usize),
+        8,
+    >::new();
+    let receive = async {
         loop {
-            serial.wait_connection().await;
+            receiver.wait_connection().await;
             let mut data = [0; 64];
-            while let Ok(n) = serial.read_packet(&mut data).await {
-                if serial.write_packet(&data[..n]).await.is_err() {
-                    break;
-                }
+            while let Ok(n) = receiver.read_packet(&mut data).await {
+                queue.send((data, n)).await;
             }
         }
     };
-    embassy_futures::join::join(device.run(), echo).await;
+    let send = async {
+        loop {
+            let (data, n) = queue.receive().await;
+            sender.wait_connection().await;
+            if sender.write_packet(&data[..n]).await.is_err() {
+                log::warn!("CDC send interrupted by disconnect");
+            }
+        }
+    };
+    embassy_futures::join::join3(device.run(), receive, send).await;
 }
 
 #[exception]
@@ -185,6 +227,7 @@ unsafe fn HardFault(_frame: &cortex_m_rt::ExceptionFrame) -> ! {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
+    cortex_m::interrupt::disable();
     struct RetentionWriter(usize);
     impl core::fmt::Write for RetentionWriter {
         fn write_str(&mut self, text: &str) -> core::fmt::Result {
