@@ -8,6 +8,8 @@ mod aw9523;
 mod display;
 #[cfg(feature = "measurement")]
 pub mod measurement;
+#[cfg(feature = "orientation")]
+mod orientation;
 #[cfg(feature = "pd-capture")]
 pub mod pd_capture;
 mod retention_log;

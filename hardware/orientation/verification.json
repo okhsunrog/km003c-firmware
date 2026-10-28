@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-28",
+  "board": "KM003C HW2.1",
+  "family": "Silan SC7A20",
+  "exact_suffix_or_revision": "unresolved",
+  "i2c_address": "0x19",
+  "who_am_i": "0x11",
+  "register_config_readback": "passed",
+  "adc_records": 360,
+  "accel_records": 360,
+  "sensor_errors": 0,
+  "cdc_dropped": 0,
+  "invalid_json_lines": 0,
+  "owner_visual_four_way_acceptance": true,
+  "clockwise_mounting_offset_quarter_turns": 3,
+  "captured_rotations": {
+    "3": 349,
+    "2": 11
+  },
+  "hardware_log_normal_return": true,
+  "hashes": {
+    "corrected.ndjson": "9e19319c3a72af0261c5ec9ca6ce524f72ce471ce31b1daf44e5a6943c6ad929",
+    "hardware-run.log": "5bfd61ce310b79fbbfe950f60c30f871d6f4a138d2805f9c7babab462ccff662",
+    "marker-after.bin": "cc45e7c827c352fae74283f2ae7b930b2545190ec0d3a0f0e7ef8f4059b37fd8",
+    "probe.ndjson": "61a0051233cfed4affd64431a8b54fcb97b22244ef11d800b01695bd69a55f44",
+    "restore.log": "b349a828b4dcf5eafa391c78a540533d4cb83be51080b581def0336fccfab7cc",
+    "tested-image.bin": "adb2ec97c7cb04cba6015c4607f3ae659a2450632c28dc93ffb3f31de1621e05"
+  },
+  "stock_restored_and_full_readback": true,
+  "final_loader_sha256": "17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf"
+}

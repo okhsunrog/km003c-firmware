@@ -9,6 +9,7 @@ default = []
 measurement = []
 measurement-reset-test = ["measurement"]
 pd-capture = []
+orientation = []
 # NDJSON measurement/PD diagnostics instead of the byte echo protocol.
 cdc-telemetry = ["measurement"]
 # Manual visual checks need time for the operator to receive the prompt.

@@ -55,6 +55,10 @@ impl Aw9523 {
             _routes: routes,
         }
     }
+    #[cfg(feature = "orientation")]
+    pub fn bus_mut(&mut self) -> &mut I2c3 {
+        &mut self.bus
+    }
     pub async fn read(&mut self, register: u8) -> Result<u8, Error> {
         let mut byte = [0];
         self.bus.write_read(0x5b, &[register], &mut byte).await?;

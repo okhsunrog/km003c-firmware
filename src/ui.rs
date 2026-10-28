@@ -89,6 +89,27 @@ fn row(
     *cache = Some(value.clone());
 }
 
+fn chrome(display: &mut crate::display::Display, tile: &mut UiTile) {
+    tile.reset(Size::new(216, 18), Rgb565::BLACK);
+    Text::new(
+        "KM003C / Rust",
+        Point::new(0, 10),
+        MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE),
+    )
+    .draw(tile)
+    .unwrap();
+    upload(display, tile, Point::new(12, 8));
+    tile.reset(Size::new(216, 16), Rgb565::BLACK);
+    Text::new(
+        "Hold EXIT: loader",
+        Point::new(0, 10),
+        MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE),
+    )
+    .draw(tile)
+    .unwrap();
+    upload(display, tile, Point::new(12, 220));
+}
+
 #[embassy_executor::task]
 pub async fn task() {
     let mut aw = unsafe { crate::aw9523::Aw9523::new() };
@@ -100,27 +121,16 @@ pub async fn task() {
         let (id, block) = display.factory_settings();
         crate::measurement::factory_settings(id, &block);
     }
+    #[cfg(feature = "orientation")]
+    let mut orientation = crate::orientation::probe(aw.bus_mut()).await;
+    #[cfg(feature = "orientation")]
+    let mut rotation = if orientation.is_some() { 3 } else { 0 };
+    #[cfg(feature = "orientation")]
+    display.set_rotation(rotation);
     display.init().await;
     display.clear(Rgb565::BLACK).unwrap();
     let mut tile = UiTile::new();
-    tile.reset(Size::new(216, 18), Rgb565::BLACK);
-    Text::new(
-        "KM003C / Rust",
-        Point::new(0, 10),
-        MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE),
-    )
-    .draw(&mut tile)
-    .unwrap();
-    upload(&mut display, &tile, Point::new(12, 8));
-    tile.reset(Size::new(216, 16), Rgb565::BLACK);
-    Text::new(
-        "Hold EXIT: loader",
-        Point::new(0, 10),
-        MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE),
-    )
-    .draw(&mut tile)
-    .unwrap();
-    upload(&mut display, &tile, Point::new(12, 220));
+    chrome(&mut display, &mut tile);
     let buttons = unsafe {
         [
             InputPin::new_pull_up(Port::B, 7),
@@ -140,6 +150,20 @@ pub async fn task() {
     }
     log::info!("Meter UI ready; hold EXIT PB7 for loader");
     loop {
+        #[cfg(feature = "orientation")]
+        if let Some(sensor) = orientation.as_mut() {
+            let next = sensor.poll(aw.bus_mut()).await;
+            if next != rotation {
+                rotation = next;
+                display.set_rotation(rotation);
+                // Each tile remains contiguous on the bus. Clear/repaint only
+                // when a debounced quarter-turn changes the complete layout.
+                display.clear(Rgb565::BLACK).unwrap();
+                caches.fill(None);
+                chrome(&mut display, &mut tile);
+                log::info!("Orientation quarter-turn={rotation}");
+            }
+        }
         let mut raw = 0;
         for (i, b) in buttons.iter().enumerate() {
             if b.is_low() {

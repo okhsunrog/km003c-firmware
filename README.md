@@ -26,6 +26,8 @@ The panel shares QSPI with external flash. The Rust transport uses PB14 SCK,
 PB13 MOSI, PB10 D/C and PB15 panel CS. It temporarily deselects flash through
 PB1 GPIO/pull-up, verifies that CS is high and restores its AF7 configuration
 after each transaction. No other task or DMA may access mapped flash meanwhile.
+The [external NOR reader](docs/external-flash.md) loads validated calibration
+without erase/program commands; a general writable storage driver is still open.
 
 AW9523B at I2C `0x5b` provides panel reset through P1_1 and backlight dimming
 through registers `0x22` / `0x23`. Its hardware ID `0x23` was read successfully.
@@ -51,6 +53,16 @@ the debounced mask at `0x200f0d20` and four press counters at `0x200f0d24`
 onward.
 The lightning-marked button's electrical CC behavior is not established by this
 UI test.
+
+## Accelerometer and automatic rotation
+
+The tested board has an SC7A20-family accelerometer at I2C `0x19`, WHO_AM_I
+`0x11`. `--features orientation` enables explicit configuration, XYZ reads and
+four-way automatic screen rotation. The owner verified all four corrected
+positions. A three-sample filter prevents rapid changes; laying the device flat
+retains the previous direction. CDC adds `accel` records in mg when telemetry is
+enabled. [Configuration and limits](docs/orientation.md) explain the shared bus,
+identity/suffix distinction and mounting offset.
 
 ## USB implementation
 
@@ -186,8 +198,11 @@ Exit is PB7, active-low. Keep an exact original package and acquire two matching
 backups before the first erase of a newly encountered stock image. Reuse that
 verified backup for later tests after checking device identity and live metadata;
 do not acquire the same full backup twice on every iteration.
-Verify image readback before starting it, and
-compare loader bytes throughout. The first four loader bytes were not readable
+Keep a working custom image installed between tests. Restore stock only for a
+specific reference comparison, recovery or explicit request; automatic DFU return
+does not erase the installed custom image. Group changes before flashing.
+Verify image readback before starting it, and compare loader bytes throughout.
+The first four loader bytes were not readable
 through the acquired dump and are not part of that comparison.
 
 The initial 1672-byte Rust execution test and the complete MCU-pad inventory,

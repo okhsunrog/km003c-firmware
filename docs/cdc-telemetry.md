@@ -92,3 +92,6 @@ km003c --reset pd capture --duration 20 --raw
 See [hardware evidence](../hardware/pd-cdc/README.md) for the reference and raw
 interval regression fixture. No external transmitter or synthetic wave source
 was used for that fixture.
+
+With the additional `orientation` feature, `accel` records report SC7A20-family
+XYZ values in mg and screen direction. See [orientation](orientation.md).

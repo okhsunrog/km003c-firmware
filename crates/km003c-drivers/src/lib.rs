@@ -5,3 +5,6 @@ pub mod calibration;
 pub mod ina229;
 pub mod pd;
 pub mod tile;
+
+pub mod rotation;
+pub mod sc7a20;

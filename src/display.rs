@@ -13,7 +13,9 @@ const CR: *mut u32 = 0x9c000000 as *mut u32;
 const FCR: *mut u32 = 0x9c000008 as *mut u32;
 const SR: *const u32 = 0x9c00000c as *const u32;
 const DATA: *mut u32 = 0x9c000010 as *mut u32;
-pub struct Display;
+pub struct Display {
+    rotation: km003c_drivers::rotation::Rotation,
+}
 impl Display {
     /// Read the native settings-A copy without any write-enable, program or
     /// erase command. Call before panel init while this owner has the entire
@@ -81,7 +83,13 @@ impl Display {
             write(FCR, 0x8572);
             write(0x9c000014 as *mut u32, 0x0b);
         }
-        Self
+        Self {
+            rotation: km003c_drivers::rotation::Rotation::default(),
+        }
+    }
+    #[cfg(feature = "orientation")]
+    pub fn set_rotation(&mut self, turns: u8) {
+        self.rotation = km003c_drivers::rotation::Rotation::new(turns);
     }
     fn idle() {
         for _ in 0..2_000_000 {
@@ -197,7 +205,7 @@ impl Display {
         if clipped.bottom_right().is_none() {
             return;
         }
-        let saved = self.start_pixels(clipped);
+        let saved = self.start_pixels(self.rotation.area(clipped, 240));
         // COLMOD=5 selects RGB565; transmit its high byte first.
         let [high, low] = color.into_storage().to_be_bytes();
         for _ in 0..clipped.size.width * clipped.size.height {
@@ -215,8 +223,13 @@ impl Display {
         if area.bottom_right().is_none() {
             return;
         }
-        let saved = self.start_pixels(area);
-        for color in pixels {
+        let saved = self.start_pixels(self.rotation.area(area, 240));
+        for index in 0..pixels.len() {
+            let color = pixels[self.rotation.source(
+                index,
+                area.size.width as usize,
+                area.size.height as usize,
+            )];
             for byte in color.into_storage().to_be_bytes() {
                 Self::byte(byte);
             }

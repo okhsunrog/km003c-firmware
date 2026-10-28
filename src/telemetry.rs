@@ -148,6 +148,8 @@ pub async fn measurements() {
             )
             .unwrap();
             emit(line);
+            #[cfg(feature = "orientation")]
+            crate::orientation::emit();
             sequence = sequence.wrapping_add(1);
         }
         embassy_time::Timer::after_millis(250).await;
