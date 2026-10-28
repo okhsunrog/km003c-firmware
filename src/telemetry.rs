@@ -25,6 +25,8 @@ enum PdCommand {
     GetCaps,
     #[cfg(feature = "pd-sink")]
     Sink(u16),
+    #[cfg(feature = "pd-bench")]
+    Bench,
 }
 #[cfg(feature = "pd-capture")]
 static PD: Channel<CriticalSectionRawMutex, PdCommand, 4> = Channel::new();
@@ -34,6 +36,12 @@ pub fn emit(line: Line) {
         DROPPED.fetch_add(1, Ordering::Relaxed);
     }
 }
+#[cfg(feature = "pd-bench")]
+pub(crate) async fn bench_line(line: Line) -> bool {
+    embassy_time::with_timeout(embassy_time::Duration::from_millis(250), OUT.send(line))
+        .await
+        .is_ok()
+}
 fn reply(message: &str) {
     let mut line = Line::new();
     writeln!(line, "{{\"type\":\"reply\",\"message\":\"{message}\"}}").unwrap();
@@ -41,6 +49,12 @@ fn reply(message: &str) {
 }
 fn command(text: &str) {
     match text.trim() {
+        #[cfg(feature = "pd-bench")]
+        "pd bench" => {
+            if PD.try_send(PdCommand::Bench).is_err() {
+                reply("PD busy");
+            }
+        }
         "status" => reply("km003c-cdc-v1"),
         "stream on" => {
             STREAM.store(true, Ordering::Relaxed);
@@ -585,6 +599,8 @@ pub async fn captures() {
             PdCommand::GetCaps => unreachable!(),
             #[cfg(feature = "pd-sink")]
             PdCommand::Sink(_) => 1,
+            #[cfg(feature = "pd-bench")]
+            PdCommand::Bench => 1,
         };
         automatic = requested == 0;
         input = if automatic {
@@ -610,6 +626,19 @@ pub async fn captures() {
         }
         let r = receiver.as_mut().unwrap();
         match command {
+            #[cfg(feature = "pd-bench")]
+            PdCommand::Bench => {
+                streaming = false;
+                automatic = false;
+                let outcome = select(PD.receive(), crate::pd_bench::run(r)).await;
+                crate::pd_tx::release();
+                r.stop();
+                match outcome {
+                    Either::Second(Err(e)) => reply(e),
+                    Either::First(_) => reply("PD benchmark stopped"),
+                    _ => (),
+                }
+            }
             #[cfg(feature = "pd-sink")]
             PdCommand::Sink(volts) => {
                 streaming = false;

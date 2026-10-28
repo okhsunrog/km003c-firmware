@@ -12,10 +12,14 @@ mod lines;
 pub mod measurement;
 #[cfg(feature = "orientation")]
 mod orientation;
+#[cfg(feature = "pd-bench")]
+mod pd_bench;
 #[cfg(all(feature = "pd-capture", feature = "cdc-telemetry"))]
 mod pd_buffered;
 #[cfg(feature = "pd-capture")]
 pub mod pd_capture;
+#[cfg(feature = "pd-sink")]
+mod pd_fast;
 #[cfg(feature = "pd-sink")]
 mod pd_sink;
 #[cfg(feature = "pd-tx-test")]

@@ -72,6 +72,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--libusb")
     parser.add_argument(
+        "--pd-bench",
+        action="store_true",
+        help="Capture at 5 V, release CC, benchmark cached PD frames",
+    )
+    parser.add_argument(
         "--sink",
         choices=["5", "9", "12", "15", "20"],
         help="Explicit unloaded-charger usbpd sink session (CC1)",
@@ -111,6 +116,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.sink and (args.cc1_probe or args.pd or args.pause_read):
         parser.error("--sink is exclusive with capture/probe/backpressure options")
+    if args.pd_bench and (args.sink or args.cc1_probe or args.pd or args.pause_read):
+        parser.error("--pd-bench is exclusive with sink/capture/backpressure options")
     if args.pd_continuous and not args.pd:
         parser.error("--pd-continuous requires --pd")
     if args.pd == "auto" and not args.pd_continuous:
@@ -133,6 +140,8 @@ def main() -> None:
             )
         if args.sink:
             device.write(0x01, f"pd sink {args.sink}\n".encode(), timeout=2000)
+        if args.pd_bench:
+            device.write(0x01, b"pd bench\n", timeout=2000)
         next_pd = time.monotonic() + 16
         # Active controls stay explicit and fixed, with no arbitrary wire frame.
         probe_start = time.monotonic() + 0.5
@@ -192,6 +201,8 @@ def main() -> None:
                 output.write(json.dumps(record, separators=(",", ":")) + "\n")
                 output.flush()
                 counts[kind] = counts.get(kind, 0) + 1
+                if args.pd_bench and kind == "pd_bench_done":
+                    deadline = time.monotonic()
                 if (
                     args.cc1_probe == "attach"
                     and args.pause_read
@@ -219,11 +230,11 @@ def main() -> None:
         device.write(
             0x01,
             b"pd stop\nstream off\n"
-            if args.pd_continuous or args.sink
+            if args.pd_continuous or args.sink or args.pd_bench
             else b"stream off\n",
             timeout=2000,
         )
-        if args.pd_continuous or args.sink:
+        if args.pd_continuous or args.sink or args.pd_bench:
             # Read the final cumulative counters and acknowledgement. There may
             # still be queued records after the last timed read, so retain the
             # partial line rather than discarding it at the session boundary.
@@ -265,6 +276,8 @@ def main() -> None:
         raise RuntimeError("No ADC records received")
     if invalid:
         raise RuntimeError("Malformed CDC records received")
+    if args.pd_bench and not counts.get("pd_bench_done"):
+        raise RuntimeError("PD benchmark did not complete")
     if args.pd and not (
         counts.get("pd_packet")
         or counts.get("pd_stats")

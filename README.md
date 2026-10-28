@@ -100,6 +100,12 @@ image, captures, timings and limits. CC2 TX, PPS/EPR policy and a higher-resolut
 Embassy time backend remain open. PD stays off by default, and working custom
 images are kept installed between tests.
 
+The sink's [measured decoder optimization](docs/pd-decoder.md) compares 18 Rust,
+Thumb-2 and DSP variants. The selected scalar Thumb-2 path reduces six-PDO
+Source Capabilities decode from 73.36 to 45.17 µs in repeated DWT benchmarks.
+[Raw comparison and renewed voltage acceptance](hardware/pd-optimization/README.md)
+preserve the timings, image hashes and recovery results.
+
 The [HC32 HAL](https://github.com/okhsunrog/hc32f460-embassy-rs) provides PAC,
 interrupt routing and clock setup. The USB task runs on `embassy-executor` and
 uses `embassy-usb` CDC ACM with **unmodified** `embassy-usb-synopsys-otg` from

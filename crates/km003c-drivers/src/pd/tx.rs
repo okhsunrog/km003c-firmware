@@ -186,6 +186,47 @@ mod tests {
             decoder.finish().unwrap();
             let intervals: Vec<_> = output[..count].iter().map(|n| n + 1).collect();
             assert_eq!(crate::pd::burst::decode(&intervals, 20, 5).unwrap(), event);
+            assert_eq!(
+                crate::pd::burst::decode_configured::<true>(&intervals, 20, 5, |_| {}).unwrap(),
+                event
+            );
+            for jitter in [false, true] {
+                let mut input = intervals.clone();
+                if jitter {
+                    for (i, x) in input.iter_mut().enumerate() {
+                        *x = (*x as i32 + [-4, 0, 4][i % 3]) as u16;
+                    }
+                }
+                assert_eq!(
+                    crate::pd::symbols::decode::<0, true>(&input, crate::pd::symbols::scalar_pair)
+                        .unwrap(),
+                    event
+                );
+                assert_eq!(
+                    crate::pd::symbols::decode::<1, true>(&input, crate::pd::symbols::scalar_pair)
+                        .unwrap(),
+                    event
+                );
+                let mut syms = [0; crate::pd::symbols::CAPACITY];
+                let status = crate::pd::symbols::scan::<0, true>(
+                    &input,
+                    &mut syms,
+                    crate::pd::symbols::scalar_pair,
+                );
+                let count = (status & 255) as usize;
+                let mut bytes = [0; 35];
+                if count != 0 {
+                    for (i, pair) in syms[..count - 1].chunks_exact(2).enumerate() {
+                        bytes[i] = crate::pd::symbols::NIBBLES[pair[0] as usize]
+                            | (crate::pd::symbols::NIBBLES[pair[1] as usize] << 4);
+                    }
+                    bytes[(count - 1) / 2] = 13;
+                }
+                assert_eq!(
+                    crate::pd::symbols::validate_bytes(status, &bytes).unwrap(),
+                    event
+                );
+            }
             match (frame, event.unwrap()) {
                 (Frame::Packet { sop, wire }, Event::Packet(p)) => {
                     assert_eq!(p.sop, sop);

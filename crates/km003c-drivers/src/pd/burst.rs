@@ -67,6 +67,16 @@ pub fn decode_observed(
     intervals: &[u16],
     half: u16,
     tol: u16,
+    mark: impl FnMut(Phase),
+) -> Result<Option<Event>, Error> {
+    decode_configured::<false>(intervals, half, tol, mark)
+}
+/// A/B benchmark entry: identical decoder with an optional ordered-set filter.
+#[inline(always)]
+pub fn decode_configured<const FILTER: bool>(
+    intervals: &[u16],
+    half: u16,
+    tol: u16,
     mut mark: impl FnMut(Phase),
 ) -> Result<Option<Event>, Error> {
     mark(Phase::Start);
@@ -88,6 +98,7 @@ pub fn decode_observed(
         word = (word >> 1) | (u32::from(b) << 19);
         seen = seen.saturating_add(1);
         if seen >= 20
+            && (!FILTER || ((0x0202_0040u32 >> (word >> 15)) & 1) != 0)
             && let Some(i) = WORDS.iter().position(|&w| w == word)
         {
             if i == 5 {

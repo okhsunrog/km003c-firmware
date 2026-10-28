@@ -51,11 +51,7 @@ pub fn init() {
 #[inline(never)]
 fn decode(data: &[u16]) -> Option<Event> {
     let mut stamp = [0u32; 5];
-    let result =
-        km003c_drivers::pd::burst::decode_observed(&data[data.len().min(1)..], 20, 5, |p| {
-            stamp[p as usize] = unsafe { (0xe0001004 as *const u32).read_volatile() };
-        });
-    stamp[4] = unsafe { (0xe0001004 as *const u32).read_volatile() };
+    let result = crate::pd_fast::decode_observed(&data[data.len().min(1)..], &mut stamp);
     if matches!(result, Ok(Some(Event::Packet(_)))) {
         for i in 0..4 {
             PHASE_CYCLES[i].store(stamp[i + 1].wrapping_sub(stamp[i]), Ordering::Relaxed);

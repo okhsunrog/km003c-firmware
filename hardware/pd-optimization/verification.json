@@ -1,0 +1,291 @@
+{
+  "clock_hz": 192000000,
+  "board": "KM003C HW2.1",
+  "stock_reference": "2.0.7",
+  "pixel_connected": false,
+  "benchmark": {
+    "candidates": 18,
+    "runs": 5,
+    "samples_per_fixture_candidate": 640,
+    "warmups_per_run": 8,
+    "interrupts_enabled": true,
+    "native_valid_gate_per_run": 322,
+    "emulated_kernels": 11,
+    "differential_cases_per_kernel": 11044,
+    "production_profile_abi_cases": 11044,
+    "fixtures": {
+      "source_caps": "live charger, six PDOs",
+      "pixel_request": "recorded Pixel 8 Pro Request",
+      "max_packet": "synthetic seven PDOs, FF payload"
+    },
+    "emulated_profile_and_abi_cases_per_kernel": 11044
+  },
+  "voltages": [
+    {
+      "requested_mv": 5000,
+      "last_five_uv": [
+        4989837,
+        4987494,
+        4983001,
+        4985931,
+        4987494
+      ],
+      "median_uv": 4987494,
+      "source_caps_goodcrc": {
+        "type": "pd_tx",
+        "wire_hex": "8102",
+        "rx_to_tx_cycles": 19639,
+        "decode_cycles": 9564,
+        "decode_phase_cycles": [
+          1955,
+          5553,
+          507,
+          344
+        ]
+      },
+      "tx_wire_hex": [
+        "8102",
+        "82100a280013",
+        "8104",
+        "8106"
+      ],
+      "stats": {
+        "type": "pd_stats",
+        "frames": 14,
+        "overruns": 6,
+        "held_overruns": 0,
+        "noise": 3,
+        "full": 0,
+        "dma_errors": 0,
+        "mismatches": 0,
+        "stop_faults": 0,
+        "input_switches": 0,
+        "switch_discards": 0,
+        "max_handler_cycles": 517,
+        "decode_errors": 0,
+        "sync_errors": 0
+      }
+    },
+    {
+      "requested_mv": 9000,
+      "last_five_uv": [
+        8990033,
+        8987884,
+        8988275,
+        8991009,
+        8990033
+      ],
+      "median_uv": 8990033,
+      "source_caps_goodcrc": {
+        "type": "pd_tx",
+        "wire_hex": "8102",
+        "rx_to_tx_cycles": 19675,
+        "decode_cycles": 9564,
+        "decode_phase_cycles": [
+          1955,
+          5553,
+          507,
+          344
+        ]
+      },
+      "tx_wire_hex": [
+        "8102",
+        "82100a280023",
+        "8104",
+        "8106"
+      ],
+      "stats": {
+        "type": "pd_stats",
+        "frames": 14,
+        "overruns": 6,
+        "held_overruns": 0,
+        "noise": 3,
+        "full": 0,
+        "dma_errors": 0,
+        "mismatches": 0,
+        "stop_faults": 0,
+        "input_switches": 0,
+        "switch_discards": 0,
+        "max_handler_cycles": 517,
+        "decode_errors": 0,
+        "sync_errors": 0
+      }
+    },
+    {
+      "requested_mv": 12000,
+      "last_five_uv": [
+        11983392,
+        11984759,
+        11982611,
+        11983587,
+        11984564
+      ],
+      "median_uv": 11983587,
+      "source_caps_goodcrc": {
+        "type": "pd_tx",
+        "wire_hex": "8102",
+        "rx_to_tx_cycles": 19659,
+        "decode_cycles": 9564,
+        "decode_phase_cycles": [
+          1955,
+          5553,
+          507,
+          344
+        ]
+      },
+      "tx_wire_hex": [
+        "8102",
+        "82100a280033",
+        "8104",
+        "8106"
+      ],
+      "stats": {
+        "type": "pd_stats",
+        "frames": 13,
+        "overruns": 6,
+        "held_overruns": 0,
+        "noise": 2,
+        "full": 0,
+        "dma_errors": 0,
+        "mismatches": 0,
+        "stop_faults": 0,
+        "input_switches": 0,
+        "switch_discards": 0,
+        "max_handler_cycles": 519,
+        "decode_errors": 0,
+        "sync_errors": 0
+      }
+    },
+    {
+      "requested_mv": 15000,
+      "last_five_uv": [
+        14984954,
+        14981634,
+        14980072,
+        14981634,
+        14982415
+      ],
+      "median_uv": 14981634,
+      "source_caps_goodcrc": {
+        "type": "pd_tx",
+        "wire_hex": "8102",
+        "rx_to_tx_cycles": 19639,
+        "decode_cycles": 9564,
+        "decode_phase_cycles": [
+          1955,
+          5553,
+          507,
+          344
+        ]
+      },
+      "tx_wire_hex": [
+        "8102",
+        "82100a280043",
+        "8104",
+        "8106"
+      ],
+      "stats": {
+        "type": "pd_stats",
+        "frames": 15,
+        "overruns": 6,
+        "held_overruns": 0,
+        "noise": 4,
+        "full": 0,
+        "dma_errors": 0,
+        "mismatches": 0,
+        "stop_faults": 0,
+        "input_switches": 0,
+        "switch_discards": 0,
+        "max_handler_cycles": 519,
+        "decode_errors": 0,
+        "sync_errors": 0
+      }
+    },
+    {
+      "requested_mv": 20000,
+      "last_five_uv": [
+        19981829,
+        19979876,
+        19980658,
+        19979290,
+        19981634
+      ],
+      "median_uv": 19980658,
+      "source_caps_goodcrc": {
+        "type": "pd_tx",
+        "wire_hex": "8102",
+        "rx_to_tx_cycles": 19883,
+        "decode_cycles": 9564,
+        "decode_phase_cycles": [
+          1955,
+          5553,
+          507,
+          344
+        ]
+      },
+      "tx_wire_hex": [
+        "8102",
+        "82100a280053",
+        "8104",
+        "8106"
+      ],
+      "stats": {
+        "type": "pd_stats",
+        "frames": 14,
+        "overruns": 6,
+        "held_overruns": 0,
+        "noise": 3,
+        "full": 0,
+        "dma_errors": 0,
+        "mismatches": 0,
+        "stop_faults": 0,
+        "input_switches": 0,
+        "switch_discards": 0,
+        "max_handler_cycles": 519,
+        "decode_errors": 0,
+        "sync_errors": 0
+      }
+    }
+  ],
+  "hashes": {
+    "benchmark-image.bin": "1bde94255d480b4df061391c35f8ca9f71cbb68761d84433d0c6d2b4bb361917",
+    "tested-image.bin": "7a81e7438c9901638fd6ee5255c4f180b425afce2d6a81a036e448f10e7ac79c"
+  },
+  "recovery": {
+    "native_loader_return": true,
+    "boot_compared_start": 4,
+    "boot_compared_end_exclusive": 16384,
+    "boot_before_sha256": "17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf",
+    "marker_words": [
+      "52555354",
+      "00000001",
+      "00004000",
+      "600d0002",
+      "00000003",
+      "00000000",
+      "00001082",
+      "00000000",
+      "00000000",
+      "00000000",
+      "00000000",
+      "00000000"
+    ],
+    "stock_reinstalled": false
+  },
+  "build": {
+    "rustc": "1.99.1 (58cf8f9c3 2026-10-13)",
+    "target": "thumbv7em-none-eabihf",
+    "production_features": [
+      "pd-sink",
+      "orientation",
+      "manual-ui-test"
+    ],
+    "comparison_features": [
+      "pd-bench",
+      "orientation",
+      "manual-ui-test"
+    ],
+    "production_pd_fast_bytes": 1908,
+    "final_rebuild_matches_readback_except_loader_metadata": true
+  }
+}

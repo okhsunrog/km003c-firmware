@@ -39,6 +39,7 @@ def main() -> None:
     parser.add_argument("--loader", action="store_true")
     parser.add_argument("--cc1-probe", choices=["attach", "getcaps"])
     parser.add_argument("--sink", choices=["5", "9", "12", "15", "20"])
+    parser.add_argument("--pd-bench", action="store_true")
     parser.add_argument(
         "--dry-run", action="store_true", help="Print command without accessing USB"
     )
@@ -74,6 +75,8 @@ def main() -> None:
         command += ["--cc1-probe", args.cc1_probe]
     if args.sink:
         command += ["--sink", args.sink]
+    if args.pd_bench:
+        command.append("--pd-bench")
     if args.dry_run:
         import shlex
 

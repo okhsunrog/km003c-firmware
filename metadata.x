@@ -11,7 +11,7 @@ SECTIONS
 {
   .pd_fast : ALIGN(4) {
     __spd_fast = .;
-    *(.pd_fast);
+    *(.pd_fast .pd_fast.*);
     . = ALIGN(4);
     __epd_fast = .;
   } > SRAMH AT > FLASH

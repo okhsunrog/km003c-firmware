@@ -7,6 +7,7 @@
 //! inferred from the native firmware's 19/38 tick transmission table.
 
 pub mod burst;
+pub mod symbols;
 pub mod tx;
 
 const DATA_SYMBOLS: [u8; 16] = [

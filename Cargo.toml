@@ -17,6 +17,7 @@ pd-capture = []
 # Deliberate, leased CC1 attach / fixed Get_Source_Capabilities bench probe.
 pd-tx-test = ["pd-capture", "cdc-telemetry"]
 pd-sink = ["pd-tx-test", "dep:usbpd", "dep:usbpd-traits", "dep:uom"]
+pd-bench = ["pd-sink"]
 orientation = []
 # NDJSON measurement/PD diagnostics instead of the byte echo protocol.
 cdc-telemetry = ["measurement"]

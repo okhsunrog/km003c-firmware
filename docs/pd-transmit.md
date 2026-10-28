@@ -162,12 +162,13 @@ PC14/PC15 cannot be treated as simple independent TX-enable pins.
 
 The firmware and CC1 probe establish that these signals participate in CC
 attachment/role and transmit behavior. PB6 high has now enabled sink attachment
-on CC1 with an unloaded charger. This does not prove transistor topology, resistor values,
-active polarity at a hidden switch, direct CC continuity, VCONN routing, or the
+on CC1 with an unloaded charger. This does not prove transistor topology,
+resistor values, active polarity at a hidden switch, direct CC continuity,
+VCONN routing, or the
 physical implementation of the lightning button's startup pulldown. Labeling
 P0_3 as a hardware-confirmed CC2 Rd control or PC14/15 pull-ups as confirmed Rp
-resistors would still go beyond this evidence. Continuity/component tracing and analog
-level/impedance measurements remain necessary to finish the schematic.
+resistors would still go beyond this evidence. Continuity/component tracing
+and analog level/impedance measurements remain necessary to finish the schematic.
 
 ## Encoding verified without the device
 
@@ -265,19 +266,28 @@ Its hot loop runs in zero-wait SRAMH. Startup follows DDL 3.3.0's 200 MHz exampl
 SRAMH zero waits, SRAM12/3/R one wait, flash five waits with cache. Linker symbols
 and a build assertion protect cortex-m-rt's normal data-copy boundary.
 
-`decode_phase_cycles` contains ordered-set search, payload BMC/4b5b, CRC and
-packet assembly/return times. A six-PDO Source Capabilities frame measured about
-19.3 / 45.9 / 2.8 / 1.4 µs respectively, with about 74 µs in the driver decode
-path. GoodCRC TX starts about 127 µs after the RX mark (about 140 µs including
-the quiet gap), below the 195 µs tTransmit limit in these runs. This is software
+`decode_phase_cycles` contains ordered-set search, payload BMC/4b5b plus shape
+validation, CRC and packet assembly/return times. With the selected scalar
+Thumb-2 decoder, six-PDO Source Capabilities measured about
+10.2 / 28.9 / 2.6 / 1.8 µs respectively, with about 49.8 µs in the instrumented
+driver path. GoodCRC TX starts about 102..104 µs after the RX mark (about
+115..117 µs including the quiet gap), below the 195 µs tTransmit limit in these
+runs. The preceding portable burst implementation measured about 74 µs and
+127 µs respectively; its evidence remains in `hardware/pd-sink`.
+This is software
 instrumentation, not an electrical compliance measurement. See the
 [onsemi timing table](https://www.onsemi.com/pdf/datasheet/fusb302b-d.pdf), page 16;
 that page was extracted using the user's `mistral_ocr --pages 16` CLI.
 
-Packed interval checks using Cortex-M4 `UQSUB16`/`USUB16` are a possible next
-optimization. A standalone compiled UQSUB16 pair-range check is shorter than
-the scalar Rust equivalent, but its effect on the complete decoder has not been
-measured and no DSP assembly is enabled in this firmware.
+The [decoder comparison](pd-decoder.md) measured 18 complete implementations,
+including two-lane `UQSUB16` and four-lane `UQSUB8`/`USUB8` kernels. Packing,
+classification and dispatch outweighed their SIMD benefit on these fixtures.
+The accepted path uses scalar Thumb-2, unrolled BMC/4b5b and confirmed alternating
+preamble skipping. Five runs of 128 measurements each reduced Source
+Capabilities from 73.36 to 45.17 µs (complete decode, CRC included, profiling
+disabled). [New evidence](../hardware/pd-optimization/README.md) also records
+renewed 5/9/12/15/20 V contracts and preserved recovery; the timer backend has
+not changed.
 
 Sources: [published driver contract](https://docs.rs/usbpd-traits/2.0.0/usbpd_traits/trait.Driver.html),
 [published sink policy](https://docs.rs/usbpd/2.0.0/usbpd/sink/device_policy_manager/trait.DevicePolicyManager.html),

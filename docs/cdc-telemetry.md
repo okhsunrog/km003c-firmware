@@ -26,6 +26,7 @@ image and `tools/usb_echo.py` remain available for USB transport regression test
 | `pd attach 1` | With `pd-tx-test` only: unloaded CC1 sink attachment for five seconds |
 | `pd getcaps` | With `pd-tx-test` only: one fixed Get_Source_Capabilities per lease |
 | `pd sink 5/9/12/15/20` | With `pd-sink`: negotiate the selected fixed voltage on CC1 for up to 20 seconds |
+| `pd bench` | With `pd-bench`: capture Source Capabilities at 5 V, detach, compare completed-burst decoders using DWT |
 | `loader` | Request native DFU and reset |
 
 PD commands require `pd-capture`. On the tested HW2.1, inputs 1/2 correspond to
@@ -109,6 +110,14 @@ sink session without passive/probe options. `pd_sink` records distinguish
 decode phases documented in [PD transmission](pd-transmit.md). ADC records
 provide the independent measured voltage. These commands change charger output;
 the hardware acceptance tests used an unloaded charger, with Pixel disconnected.
+
+`uv run tools/bench.py decoder --pd-bench --seconds 25` compares decoder
+implementations with the optional `pd-bench` image. It is exclusive with other
+PD/probe commands and backpressure tests. `pd_bench_fixture` preserves input
+intervals, `pd_bench_samples` preserves raw cycle counts, `pd_bench` gives
+quantiles and `pd_bench_done` marks success. This command briefly attaches at
+5 V, then releases outputs/stops DMA before benchmarking. See the
+[decoder method and validation](pd-decoder.md).
 
 `--pd-continuous --pd 1` starts buffered capture and stops it after recording.
 `--pd-continuous --pd auto` uses automatic selection.
