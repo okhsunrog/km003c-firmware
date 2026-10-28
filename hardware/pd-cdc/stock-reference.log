@@ -1,0 +1,32 @@
+USB PD Negotiation Capture
+NOW: Disconnect and reconnect your USB-C load!
+Capturing for 20 seconds... (Press Ctrl+C to stop early)
+
+[ 141.681s] RAW[6]: 82 16 2E A2 03 63 
+[ 141.681s] SOP0: Data(Request)        (ID=3, ROLE=Sink/Ufp)
+             RDO: Requesting PDO#6 (Raw=0x6303A22E)
+[ 141.681s] RAW[2]: 21 07 
+[ 141.681s] SOP0: Control(GoodCRC)     (ID=3, ROLE=Source/Dfp)
+[ 141.685s] RAW[2]: A3 0B 
+[ 141.685s] SOP0: Control(Accept)      (ID=5, ROLE=Source/Dfp)
+[ 141.686s] RAW[2]: 41 0A 
+[ 141.686s] SOP0: Control(GoodCRC)     (ID=5, ROLE=Sink/Ufp)
+[ 141.705s] RAW[2]: A6 0D 
+[ 141.705s] SOP0: Control(PsRdy)       (ID=6, ROLE=Source/Dfp)
+[ 141.706s] RAW[2]: 41 0C 
+[ 141.706s] SOP0: Control(GoodCRC)     (ID=6, ROLE=Sink/Ufp)
+[ 150.888s] RAW[6]: 82 18 2E A2 03 63 
+[ 150.888s] SOP0: Data(Request)        (ID=4, ROLE=Sink/Ufp)
+             RDO: Requesting PDO#6 (Raw=0x6303A22E)
+[ 150.889s] RAW[2]: 21 09 
+[ 150.889s] SOP0: Control(GoodCRC)     (ID=4, ROLE=Source/Dfp)
+[ 150.893s] RAW[2]: A3 0F 
+[ 150.893s] SOP0: Control(Accept)      (ID=7, ROLE=Source/Dfp)
+[ 150.894s] RAW[2]: 41 0E 
+[ 150.894s] SOP0: Control(GoodCRC)     (ID=7, ROLE=Sink/Ufp)
+[ 150.913s] RAW[2]: A6 01 
+[ 150.913s] SOP0: Control(PsRdy)       (ID=0, ROLE=Source/Dfp)
+[ 150.914s] RAW[2]: 41 00 
+[ 150.914s] SOP0: Control(GoodCRC)     (ID=0, ROLE=Sink/Ufp)
+
+Capture complete.

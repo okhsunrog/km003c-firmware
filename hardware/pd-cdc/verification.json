@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-28",
+  "hardware": "KM003C HW2.1",
+  "native_version": "2.0.7",
+  "load": "Google Pixel 8 Pro / PPS (owner confirmed)",
+  "records": {
+    "reply": 5,
+    "adc": 160,
+    "pd_raw": 30,
+    "pd_packet": 3,
+    "pd_summary": 3,
+    "pd_registers": 3
+  },
+  "adc_dropped": 0,
+  "ndjson_invalid_after_status": 0,
+  "pd_crc_valid": 3,
+  "raw_chunks_complete": true,
+  "pd_input": "PA0 / CMP1_INP1, physical CC numbering unresolved",
+  "reference_request_interval_seconds": 9.207,
+  "retained_normal_return": true,
+  "hashes": {
+    "adc-init.bin": "3fa558f9e5290c8b4fde1950925acb64ca15a8443caaa02e4e22f725266e67da",
+    "adc-retention.bin": "df89466740b36eb2aa6c6580210376de2d17624ed507451eec0e88fbb8fbd7d2",
+    "capture.ndjson": "c7ff0505fa61e984da284a38b6bd317467bb15b32179ba3c4c8402dc436b9954",
+    "hardware-run.log": "e64e5284978917b3eed80e08cb44e11ae87efb0dc33d77a9e553606b4dea7fe7",
+    "marker-after.bin": "d8ae077d590255fe935f84f7e0bb0c6af0ab541d919ec8d91b3a015da4d8332a",
+    "restore.log": "b349a828b4dcf5eafa391c78a540533d4cb83be51080b581def0336fccfab7cc",
+    "stock-reference.log": "da88a895d35912feaf1388fb7e8c362f488c7c5830e0dc76a41d9470516cac8f",
+    "stock-registers.log": "39ea02a81a076e4cbe4b41b470abc662756db3db0b31bed3e474344fed0a8d76",
+    "tested-image.bin": "e0f4dd65ba96d276a0d4ed6561809851a10d458bffdef65d47ce0120fb1b14ca"
+  },
+  "stock_restored_and_full_readback": true,
+  "final_loader_sha256": "17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf"
+}

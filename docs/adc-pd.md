@@ -3,7 +3,9 @@
 Implementation and hardware tests dated 2026-10-28. INA229 reads are now
 confirmed on HW2.1 alongside USB/display operation. Two 90-second runs produced
 720 samples without SPI errors. [Evidence](../hardware/adc-207/README.md) records
-stock 2.0.7 comparisons and restoration. Passive PD remains untested on hardware.
+stock 2.0.7 comparisons and restoration. Single-burst passive PD now captures
+a CRC-valid PPS Request on PA0;
+continuous acquisition and the other cable orientation remain unverified.
 
 ## Measurement
 
@@ -102,9 +104,10 @@ there is no reassembly, GoodCRC generation, PD negotiation or transmitter.
 cargo build --release --locked --features pd-capture
 ```
 
-This compiles `pd_capture::Receiver`; **main does not construct or start it**.
-The hardware operator must verify/configure the analog pad, choose CMP1_INP1 or
-INP2 and a DAC code, then explicitly create the receiver. The interface requires
+Alone, this compiles `pd_capture::Receiver` without starting it. Adding
+`cdc-telemetry` exposes command-driven passive bursts: `pd 1` / `pd 2` configure
+PA0/PA1 as analog and select CMP1_INP1/2 with native DAC code `0x20`.
+See [CDC protocol and hardware limits](cdc-telemetry.md). The interface requires
 exclusive TMRA2, CMP1/DAC1, DCU1, DMA1 and corresponding AOS/IRQ resources.
 It does not configure PA0/PA1 TX, PC14/PC15, CC termination or GPIO switches.
 External comparator VCOUT and timer waveform outputs are disabled.
@@ -120,9 +123,10 @@ callback and resets decoding at each packet gap.
 
 Use up to 860 halfwords. `capture` exposes raw intervals for inspecting timing
 before assuming a decoder configuration. The native divider is PCLK1/8; our
-96 MHz PCLK1 suggests 20 ticks per BMC half-bit, but real timing/threshold and
-capture/clear ordering still require measurement. Code 0x20 is the native DAC
-setting, not a verified voltage threshold for this board.
+96 MHz PCLK1 gives 20 nominal ticks per BMC half-bit. Measured groups are
+15/19/23 and 35/39/43 ticks; tolerance 5 decodes the captured Request with CRC.
+The first edge starts the timer and is excluded from decoding. Code 0x20 is the
+native DAC setting, not a verified voltage threshold for this board.
 
 This is a single-burst implementation: packets during processing/rearm can be
 lost. It does not claim a continuous, lossless analyzer. Timeout, DMA errors,

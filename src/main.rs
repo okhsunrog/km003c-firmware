@@ -11,6 +11,8 @@ pub mod measurement;
 #[cfg(feature = "pd-capture")]
 pub mod pd_capture;
 mod retention_log;
+#[cfg(feature = "cdc-telemetry")]
+mod telemetry;
 mod ui;
 mod usb;
 const MARKER: *mut u32 = 0x200f_0fc0 as *mut u32;
@@ -135,6 +137,10 @@ fn main() -> ! {
         s.spawn(ui::task().unwrap());
         #[cfg(feature = "measurement")]
         s.spawn(measurement::task().unwrap());
+        #[cfg(feature = "cdc-telemetry")]
+        s.spawn(telemetry::measurements().unwrap());
+        #[cfg(all(feature = "cdc-telemetry", feature = "pd-capture"))]
+        s.spawn(telemetry::captures().unwrap());
     })
 }
 
@@ -200,7 +206,11 @@ async fn usb_task() {
     }
     let mut config = embassy_usb::Config::new(0x5fc9, 0x0063);
     config.manufacturer = Some("KM003C experimental");
-    config.product = Some("KM003C Rust USB test");
+    config.product = Some(if cfg!(feature = "cdc-telemetry") {
+        "KM003C Rust telemetry"
+    } else {
+        "KM003C Rust USB test"
+    });
     config.serial_number = Some("rust-bringup");
     let mut cd = [0; 256];
     let mut bd = [0; 256];
@@ -214,31 +224,44 @@ async fn usb_task() {
     unsafe {
         write_volatile(MARKER.add(4), 3);
     }
-    let (mut sender, mut receiver) = serial.split();
-    let queue = embassy_sync::channel::Channel::<
-        embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
-        ([u8; 64], usize),
-        8,
-    >::new();
-    let receive = async {
-        loop {
-            receiver.wait_connection().await;
-            let mut data = [0; 64];
-            while let Ok(n) = receiver.read_packet(&mut data).await {
-                queue.send((data, n)).await;
+    #[cfg(feature = "cdc-telemetry")]
+    {
+        let (sender, receiver) = serial.split();
+        embassy_futures::join::join3(
+            device.run(),
+            telemetry::receive(receiver),
+            telemetry::send(sender),
+        )
+        .await;
+    }
+    #[cfg(not(feature = "cdc-telemetry"))]
+    {
+        let (mut sender, mut receiver) = serial.split();
+        let queue = embassy_sync::channel::Channel::<
+            embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
+            ([u8; 64], usize),
+            8,
+        >::new();
+        let receive = async {
+            loop {
+                receiver.wait_connection().await;
+                let mut data = [0; 64];
+                while let Ok(n) = receiver.read_packet(&mut data).await {
+                    queue.send((data, n)).await;
+                }
             }
-        }
-    };
-    let send = async {
-        loop {
-            let (data, n) = queue.receive().await;
-            sender.wait_connection().await;
-            if sender.write_packet(&data[..n]).await.is_err() {
-                log::warn!("CDC send interrupted by disconnect");
+        };
+        let send = async {
+            loop {
+                let (data, n) = queue.receive().await;
+                sender.wait_connection().await;
+                if sender.write_packet(&data[..n]).await.is_err() {
+                    log::warn!("CDC send interrupted by disconnect");
+                }
             }
-        }
-    };
-    embassy_futures::join::join3(device.run(), receive, send).await;
+        };
+        embassy_futures::join::join3(device.run(), receive, send).await;
+    }
 }
 
 #[exception]

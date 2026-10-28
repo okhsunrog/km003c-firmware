@@ -1,8 +1,8 @@
-//! Opt-in, single-burst passive PD capture candidate. Not started by main.
+//! Opt-in, single-burst passive PD capture. CDC commands start acquisition.
 //!
 //! Register settings follow native 1.9.9 init (device address 0x102c0), checked
-//! against DDL 3.3.0 and an offline Unicorn write trace. This is not hardware
-//! acceptance. Analog pad/CC mapping and the actual timer rate remain to verify.
+//! against DDL 3.3.0 and an offline Unicorn write trace. HW2.1 captured a
+//! CRC-valid PPS Request on PA0/CMP1_INP1; physical CC names remain unresolved.
 //! No PA0/PA1 AF4, PC14/PC15 output, Rd/Rp or GoodCRC writes are performed.
 use core::{
     future::poll_fn,
@@ -24,6 +24,12 @@ const DCU: usize = 0x40052000;
 const WAITING: u32 = u32::MAX;
 static END: AtomicU32 = AtomicU32::new(WAITING);
 static WAKER: AtomicWaker = AtomicWaker::new();
+fn read8(address: usize) -> u8 {
+    unsafe { (address as *const u8).read_volatile() }
+}
+fn write8(address: usize, value: u8) {
+    unsafe { (address as *mut u8).write_volatile(value) }
+}
 fn read16(address: usize) -> u16 {
     unsafe { (address as *const u16).read_volatile() }
 }
@@ -57,7 +63,7 @@ fn stop_events() {
     // output only. Then stop the timer and disable/clear overflow IRQ state.
     write16(CMP, read16(CMP) & !0x1060);
     write16(TMRA + 0x80, read16(TMRA + 0x80) & !1);
-    write16(TMRA + 0x82, read16(TMRA + 0x82) & !0x50);
+    write8(TMRA + 0x81, read8(TMRA + 0x81) & !0x50);
 }
 struct StopEvents;
 impl Drop for StopEvents {
@@ -68,7 +74,7 @@ impl Drop for StopEvents {
 
 #[interrupt]
 fn INT008() {
-    if read16(TMRA + 0x82) & 0x40 != 0 {
+    if read8(TMRA + 0x81) & 0x40 != 0 {
         stop_events();
         END.store(read32(DCU + 8) & 0xffff, Ordering::Release);
         WAKER.wake();
@@ -88,6 +94,36 @@ pub struct Receiver {
     _routes: [Route; 3],
 }
 impl Receiver {
+    /// Passive snapshot after capture cancellation; no register reads clear
+    /// flags here. Field order is documented in the CDC protocol notes.
+    pub fn diagnostics(&self) -> [u32; 12] {
+        [
+            u32::from(read16(CMP)),
+            u32::from(read16(CMP + 2)),
+            u32::from(read16(CMP + 4)),
+            read32(TMRA + 0x80),
+            u32::from(read16(TMRA)),
+            u32::from(read16(TMRA + 0x48)),
+            read32(DCU + 8),
+            read32(0x400530e8),
+            read32(0x4001084c),
+            read32(0x40010850),
+            read32(0x40053010),
+            read32(0x40053014),
+        ]
+    }
+
+    /// Switch only the internal comparator mux between captures. Event/output
+    /// drivers stay disabled; this does not change termination or any GPIO.
+    pub fn select_input(&mut self, input: Input) {
+        stop_events();
+        let positive = match input {
+            Input::Cmp1Inp1 => 0x100,
+            Input::Cmp1Inp2 => 0x200,
+        };
+        write16(CMP + 2, 0x4004 | positive);
+    }
+
     /// Feed a captured burst into the independent decoder. Errors are emitted
     /// alongside valid packets so callers can measure loss/noise rather than
     /// silently accepting a damaged trace. A quiet gap always resets state.
@@ -141,7 +177,7 @@ impl Receiver {
         // Timer counts up, PCLK1/8. Native event starts AND clears the timer,
         // and channel 3 captures each CMP1 event, so samples are edge intervals.
         write16(TMRA + 0x80, 0x32);
-        write16(TMRA + 0x82, 0);
+        write8(TMRA + 0x81, 0);
         write16(TMRA + 0x84, 0x404); // HSTA2 + HCLE2, common event
         write16(TMRA + 0x88, 0); // Disable alternate count sources.
         write16(TMRA + 0x8c, 0);
@@ -203,7 +239,8 @@ impl Receiver {
         }
         .map_err(Error::Dma)?;
         let guard = StopEvents;
-        write16(TMRA + 0x82, 0x10); // Overflow IRQ, stale flags cleared
+        // BCSTRH is the byte at +0x81, not a halfword at +0x82.
+        write8(TMRA + 0x81, 0x10); // Overflow IRQ, stale flags cleared
         write16(CMP, read16(CMP) | 0x60); // Both edges, no CPU comparator IRQ
         let end = poll_fn(|cx| {
             WAKER.register(cx.waker());
@@ -221,7 +258,9 @@ impl Receiver {
             Either::Second(Ok(events)) => {
                 // A DCU event alone does not prove a DMA write succeeded. Check
                 // the settled transfer count before exposing buffer contents.
-                let remaining = (read32(0x400530c8) >> 16) as usize;
+                // DTCTL2 holds the programmed reload count; MONDTCTL2 is
+                // the live remaining count (DDL DMA_GetTransCount).
+                let remaining = (read32(0x400530e8) >> 16) as usize;
                 let transferred = capacity.saturating_sub(remaining);
                 if events != transferred || events > capacity {
                     Err(Error::CountMismatch {
