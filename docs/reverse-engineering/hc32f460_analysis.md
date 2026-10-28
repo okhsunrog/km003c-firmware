@@ -227,10 +227,8 @@ identify the SC7A20 family. The exact suffix/revision remains unconfirmed. The
 custom driver and four-way display rotation are now hardware-accepted; see
 [board bring-up](board_bringup.md#accelerometer-and-automatic-display-rotation-2026-10-28).
 
-This is distinct from the photographed INA228: TI's
-[address table](https://www.ti.com/document-viewer/INA228/datasheet/GUID-E4E4E716-7FF4-403D-AA16-CF0C7187D9F5)
-permits addresses `0x40–0x4f`. The photo's `228I` marking matches TI's
-[official marking information](https://www.ti.com/ods/sysadd/oa/symlink/ina228_oa.pdf).
+The power monitor is a separate SPI device. The enlarged teardown photo reads
+`229`, consistent with [TI INA229](https://www.ti.com/product/INA229).
 
 On the tested HW2.1 device, the measurement target is now confirmed as INA229:
 SPI2 manufacturer/device reads returned `0x5449` / `0x2291`. It is separate

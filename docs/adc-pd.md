@@ -22,8 +22,8 @@ The native SPI2 code is stronger evidence than an unidentified SPI peripheral:
 
 All four SPI helper addresses map to the preserved device 1.9.9 image. The
 INA229 driver returned physical manufacturer ID `0x5449` and device ID
-`0x2291`. This does not identify a
-photographed component on another unit or prove all board revisions are equal.
+`0x2291`. The enlarged teardown photo also reads `229`, consistent with this
+identification; other board revisions still require their own verification.
 See TI's [SPI framing](https://www.ti.com/document-viewer/INA229/datasheet/GUID-9C15D0DA-F5E2-4FE1-9EB9-B62E23643817)
 and [register map](https://www.ti.com/document-viewer/INA229/datasheet/GUID-25B37629-8261-48D8-BE56-62622C36C345).
 

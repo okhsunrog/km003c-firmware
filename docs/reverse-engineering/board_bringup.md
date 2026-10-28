@@ -58,9 +58,8 @@ The raw register samples and selected decompilations are preserved under
   drive PB15 low, use the QSPI direct-command port, then restore flash selection.
   The display and external flash share this controller/bus.
 - USB: PA9 VBUS, PA11 DM, PA12 DP, all AF10. PA10 is used by SPI2.
-- The teardown photo identifies a different specimen as INA228. On our unit,
-  INA229 identification now rests on SPI register protocol and actual ID reads;
-  it is independent of the photo interpretation.
+- The enlarged teardown photo also reads `229`. Our unit's INA229 identification
+  is independently established by the SPI protocol and actual device-ID reads.
 
 Live CMU SCFGR was `0x00212211`; PLLCFGR at `0x40054100` was
 `0x01300b00` and UPLLCFGR at `+4` was `0x11101300`. The MPLL source bit
@@ -149,7 +148,7 @@ For a standalone USB application, initialize or explicitly verify:
    and keep Exit hardware entry. A watchdog needs deliberate configuration;
    it is not automatically enabled by the current loader's ICG.
 
-Neither display, ADC/INA228, sensor, external flash nor PD/CC configuration is
+Neither display, ADC/INA229, sensor, external flash nor PD/CC configuration is
 required for the initial Rust execution test or maintenance USB enumeration.
 
 ## LQFP48 pad inventory

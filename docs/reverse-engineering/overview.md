@@ -217,7 +217,7 @@ provides additional component evidence:
 | Component | Evidence | Limits |
 |-----------|----------|--------|
 | AWINIC AW9523B | Visible marking; the application and bootloader register sequences match its GPIO/LED register map | Individual PCB signal assignments remain to be recovered |
-| TI INA228 (teardown specimen) | Visible `228I` marking and 10-pin package match TI's [package marking addendum](https://www.ti.com/ods/sysadd/oa/symlink/ina228_oa.pdf) | Our HW2.1 unit instead returned INA229 IDs over SPI2; see below |
+| TI INA229 | The enlarged photo reads `229`, consistent with TI's [20-bit SPI power monitor](https://www.ti.com/product/INA229) | Our HW2.1 unit independently returned matching INA229 IDs over SPI2 |
 
 | Address | Device | Notes |
 |---------|--------|-------|
@@ -230,14 +230,13 @@ describes 16 GPIO/LED outputs. The matching firmware evidence is detailed in
 Address `0x5B` must not be used as evidence of an external PD PHY. The external
 PD/CC circuitry remains to be reconstructed independently.
 
-TI specifies INA228 addresses in the range `0x40–0x4F`; neither address listed
-above is an INA228 address. Do not assign the photographed INA228 to the
-sensor at `0x19`.
+INA229 uses SPI, not I2C. Neither I2C address listed above belongs to this
+power monitor; `0x19` is the separate orientation sensor.
 
 On the tested HW2.1 unit, SPI2 returned manufacturer/device IDs `0x5449` /
 `0x2291`, confirming **INA229**. The Rust driver collected 360 samples and
-passed concurrent USB echo. This runtime identification is separate from the
-teardown photo. See [board acceptance](board_bringup.md#ina229-acceptance-against-stock-207-2026-10-28).
+passed concurrent USB echo. The runtime IDs and the corrected photo reading
+support the same identification. See [board acceptance](board_bringup.md#ina229-acceptance-against-stock-207-2026-10-28).
 
 ---
 
