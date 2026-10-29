@@ -34,19 +34,20 @@ constraints rather than replacing working register sequences blindly.
 
 ## USB control, telemetry and logging
 
-The intended replacement for the temporary CDC ASCII/NDJSON protocol is
-`postcard-rpc`. Define request/response and topic types in a shared `no_std`
+The [postcard-rpc image](rpc.md) now replaces CDC ASCII/NDJSON for status,
+measurements, active PD control/events and logging. Passive and benchmark
+commands still require the legacy image. Define remaining request/response and
+topic types in the shared `no_std`
 interface crate used by firmware and a Rust host client. Use endpoints for
 status, configuration, explicit PD control and loader entry; topics carry
 measurements, captured PD traffic and diagnostics. Preserve explicit active-PD
 control and cancellation/release semantics across the migration.
 
-Keep the existing Synopsys/HC32 USB driver. Prefer postcard-rpc's native USB
-bulk transport over maintaining the text parser. Upstream has an
-`embassy-usb-0_6-server` feature, matching our USB stack's version family.
-Before integration, resolve its explicit `embassy-usb-driver` dependency pin
-against our git override; version-family agreement alone is not evidence that
-the dependency graph compiles or uses the same driver trait types.
+The image retains the existing Synopsys/HC32 USB driver and uses upstream's
+native bulk backend. Upstream revision `2469ebc6` adds Embassy USB 0.6 support
+and relaxes the old driver pin. The USB/sync/time dependency graph now uses one
+Embassy git revision; [integration details](rpc.md) record that compatibility
+work and hardware results.
 
 `Sender::log_str` and `log_fmt` publish text on standard `LoggingTopic`.
 An adapter for synchronous `log` calls must enqueue bounded records for a

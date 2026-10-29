@@ -201,6 +201,7 @@ impl Buffered {
     }
     /// Reselect a passive input without resetting cumulative loss counters.
     /// Any old queued/partial burst is discarded explicitly, never mislabeled.
+    #[cfg(not(feature = "rpc"))]
     pub fn switch_input(&mut self, input: Input) -> bool {
         self.restart(input, false)
     }
@@ -286,6 +287,7 @@ impl Buffered {
     pub fn faulted(&self) -> bool {
         STATE.lock(|c| c.borrow().as_ref().is_some_and(|s| !s.running))
     }
+    #[cfg(not(feature = "rpc"))]
     pub async fn once(&mut self, buffer: &mut [u16]) -> Result<usize, pd_capture::Error> {
         if !self.stop() {
             return Err(pd_capture::Error::Dma(embassy_hc32::dma::Error::NotStopped));
@@ -295,9 +297,11 @@ impl Buffered {
             .capture(buffer, embassy_time::Duration::from_secs(15))
             .await
     }
+    #[cfg(not(feature = "rpc"))]
     pub fn input(&mut self, input: Input) {
         self.receiver.select_input(input);
     }
+    #[cfg(not(feature = "rpc"))]
     pub fn diagnostics(&self) -> [u32; 12] {
         self.receiver.diagnostics()
     }

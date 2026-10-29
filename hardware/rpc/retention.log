@@ -1,0 +1,164 @@
+ipient: Device, request: 6, value: 768, index: 0, length: 4096 }
+control: data_in write: [
+    0x4,
+    0x3,
+    0x9,
+    0x4,
+]
+write ep=EndpointAddress(128) data=[
+    0x4,
+    0x3,
+    0x9,
+    0x4,
+]
+write ep=EndpointAddress(128): diepctl 00028000 ftxfsts 00000010
+write ep=EndpointAddress(128) wait for prev: ready
+write ep=EndpointAddress(128) wait for fifo: ready
+write done ep=EndpointAddress(128)
+in ep=0 irq val=000020c1
+=== status 01a50000
+OUT_DATA_RX ep=0 len=0
+=== status 01a70000
+OUT_DATA_DONE ep=0
+=== status 01ac0080
+SETUP_DATA_RX
+=== status 01a80000
+SETUP_DATA_DONE ep=0
+oepint
+out ep=0 irq val=00008019
+control: data_in waiting for status
+read start len=0
+read ep=EndpointAddress(0) done len=0
+control: complete
+SETUP received: [
+    0x80,
+    0x6,
+    0x2,
+    0x3,
+    0x9,
+    0x4,
+    0x0,
+    0x10,
+]
+control request: Request { direction: In, request_type: Standard, recipient: Device, request: 6, value: 770, index: 1033, length: 4096 }
+control: data_in write: [
+    0x20,
+    0x3,
+    0x4b,
+    0x0,
+    0x4d,
+    0x0,
+    0x30,
+    0x0,
+    0x30,
+    0x0,
+    0x33,
+    0x0,
+    0x43,
+    0x0,
+    0x20,
+    0x0,
+    0x52,
+    0x0,
+    0x75,
+    0x0,
+    0x73,
+    0x0,
+    0x74,
+    0x0,
+    0x20,
+    0x0,
+    0x52,
+    0x0,
+    0x50,
+    0x0,
+    0x43,
+    0x0,
+]
+write ep=EndpointAddress(128) data=[
+    0x20,
+    0x3,
+    0x4b,
+    0x0,
+    0x4d,
+    0x0,
+    0x30,
+    0x0,
+    0x30,
+    0x0,
+    0x33,
+    0x0,
+    0x43,
+    0x0,
+    0x20,
+    0x0,
+    0x52,
+    0x0,
+    0x75,
+    0x0,
+    0x73,
+    0x0,
+    0x74,
+    0x0,
+    0x20,
+    0x0,
+    0x52,
+    0x0,
+    0x50,
+    0x0,
+    0x43,
+    0x0,
+]
+write ep=EndpointAddress(128): diepctl 00028000 ftxfsts 00000010
+write ep=EndpointAddress(128) wait for prev: ready
+write ep=EndpointAddress(128) wait for fifo: ready
+write done ep=EndpointAddress(128)
+in ep=0 irq val=000020c1
+=== status 01e50000
+OUT_DATA_RX ep=0 len=0
+=== status 01e70000
+OUT_DATA_DONE ep=0
+control: data_in waiting for status
+read start len=0
+read ep=EndpointAddress(0) done len=0
+control: complete
+write ep=EndpointAddress(129): diepctl 80488040 ftxfsts 000000d0
+write ep=EndpointAddress(129) wait for prev: pending
+in ep=1 irq val=00002091
+=== status 01a500d1
+OUT_DATA_RX ep=1 len=13
+=== status 01a70001
+OUT_DATA_DONE ep=1
+read ep=EndpointAddress(1) done len=13
+write ep=EndpointAddress(129) data=[]
+write ep=EndpointAddress(129): diepctl 00498040 ftxfsts 000000e0
+write ep=EndpointAddress(129) wait for prev: ready
+in ep=1 irq val=00002091
+write done ep=EndpointAddress(129)
+write ep=EndpointAddress(129) data=[
+    0x20,
+    0x8d,
+    0x1,
+    0x0,
+    0x0,
+    0x0,
+    0x1,
+    0x8d,
+    0xb9,
+    0x4,
+    0x80,
+    0xe0,
+    0xc6,
+    0x5b,
+]
+write ep=EndpointAddress(129): diepctl 00488040 ftxfsts 000000e0
+write ep=EndpointAddress(129) wait for prev: ready
+write ep=EndpointAddress(129) wait for fifo: ready
+write done ep=EndpointAddress(129)
+in ep=1 irq val=00002091
+read start len=512
+=== status 01c40061
+OUT_DATA_RX ep=1 len=6
+=== status 01c60001
+OUT_DATA_DONE ep=1
+read ep=EndpointAddress(1) done len=6

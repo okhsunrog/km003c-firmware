@@ -10,6 +10,7 @@ codegen-units = 1
 
 [features]
 default = []
+rpc = ["measurement"]
 # Hardware candidates are opt-in until separately accepted on this board.
 measurement = []
 measurement-reset-test = ["measurement"]
@@ -40,11 +41,20 @@ embedded-hal = "1.0.0"
 embedded-hal-async = "1.0.0"
 heapless = "0.9.3"
 km003c-drivers = { version = "0.1.0", path = "crates/km003c-drivers" }
+km003c-interface = { version = "0.1.0", path = "crates/km003c-interface" }
 log = { version = "0.4.34", default-features = false }
+postcard-rpc = { git = "https://github.com/jamesmunns/postcard-rpc", version = "0.12.1", default-features = false, features = ["embassy-usb-0_6-server"], rev = "2469ebc6" }
 static_cell = "2.1.1"
 uom = { version = "0.36.0", default-features = false, features = ["si", "u32"], optional = true }
 usbpd = { version = "2.0.0", features = ["log"], optional = true }
 usbpd-traits = { version = "2.0.0", optional = true }
 
 [patch.crates-io]
+embassy-executor-timer-queue = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-time-queue-utils = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-usb = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-net-driver-channel = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
 embassy-usb-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }

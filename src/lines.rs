@@ -25,7 +25,7 @@ pub fn fresh() -> Option<Sample> {
 pub fn snapshot() -> Option<Sample> {
     LATEST.lock(Cell::get)
 }
-#[cfg(feature = "cdc-telemetry")]
+#[cfg(all(feature = "cdc-telemetry", not(feature = "rpc")))]
 pub fn cc_input() -> Option<u8> {
     match INPUT.load(Ordering::Relaxed) {
         1 => Some(1),

@@ -77,7 +77,7 @@ impl Controller {
         s.rotation
     }
 }
-#[cfg(feature = "cdc-telemetry")]
+#[cfg(all(feature = "cdc-telemetry", not(feature = "rpc")))]
 pub fn emit() {
     use core::fmt::Write;
     let s = STATE.lock(Cell::get);

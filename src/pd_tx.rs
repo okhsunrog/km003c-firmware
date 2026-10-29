@@ -9,10 +9,9 @@ use core::{
     sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering, fence},
     task::Poll,
 };
-use km003c_drivers::pd::{
-    Sop,
-    tx::{self, Frame, Periods},
-};
+#[cfg(not(feature = "rpc"))]
+use km003c_drivers::pd::Sop;
+use km003c_drivers::pd::tx::{self, Frame, Periods};
 
 const TIMER: usize = 0x40015400;
 const DMA: usize = 0x40053000;
@@ -314,6 +313,7 @@ fn on_interrupt_locked(kind: u8) -> bool {
 
 /// One fixed PD3.0 sink/UFP MessageID=0 control frame per five-second lease.
 /// This asks for capabilities; it cannot select a voltage or enter EPR.
+#[cfg(not(feature = "rpc"))]
 pub async fn get_caps(rx: &mut crate::pd_buffered::Buffered) -> Result<usize, &'static str> {
     bounded_measurements()?;
     let s = crate::lines::fresh().ok_or("line ADC stale")?;

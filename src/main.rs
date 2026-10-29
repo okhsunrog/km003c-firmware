@@ -30,8 +30,14 @@ mod pd_sink;
 #[cfg(feature = "pd-tx-test")]
 mod pd_tx;
 mod retention_log;
-#[cfg(feature = "cdc-telemetry")]
+#[cfg(feature = "rpc")]
+mod rpc;
+#[cfg(all(feature = "rpc", feature = "pd-sink"))]
+mod rpc_pd;
+#[cfg(all(feature = "cdc-telemetry", not(feature = "rpc")))]
 mod telemetry;
+#[cfg(all(feature = "rpc", feature = "pd-sink"))]
+use rpc_pd as telemetry;
 #[cfg(feature = "pd-bench")]
 mod time_stats;
 mod ui;
@@ -202,7 +208,7 @@ fn main() -> ! {
     EXECUTOR.init(embassy_executor::Executor::new()).run(|s| {
         #[cfg(feature = "measurement")]
         measurement::init();
-        s.spawn(usb_task(usb_driver, usb_route).unwrap());
+        s.spawn(usb_task(usb_driver, usb_route, s).unwrap());
         #[cfg(feature = "pd-tx-test")]
         s.spawn(pd_tx::lease_task().unwrap());
         s.spawn(ui::task(aw).unwrap());
@@ -213,13 +219,19 @@ fn main() -> ! {
             s.spawn(measurement::task().unwrap());
             s.spawn(lines::task().unwrap());
         }
-        #[cfg(feature = "cdc-telemetry")]
+        #[cfg(all(feature = "cdc-telemetry", not(feature = "rpc")))]
         s.spawn(telemetry::measurements().unwrap());
-        #[cfg(all(feature = "cdc-telemetry", feature = "pd-capture"))]
+        #[cfg(all(
+            feature = "cdc-telemetry",
+            feature = "pd-capture",
+            not(feature = "rpc")
+        ))]
         {
             telemetry::start_capture_task();
             s.spawn(telemetry::pd_reports().unwrap());
         }
+        #[cfg(all(feature = "rpc", feature = "pd-sink"))]
+        rpc_pd::start();
     })
 }
 
@@ -244,7 +256,18 @@ fn INT081() {
 async fn usb_task(
     driver: embassy_usb_synopsys_otg::Driver<'static>,
     _route: embassy_hc32::intc::Route,
+    _spawner: embassy_executor::Spawner,
 ) {
+    #[cfg(feature = "rpc")]
+    {
+        rpc::run(driver, _spawner).await;
+    }
+    #[cfg(not(feature = "rpc"))]
+    usb_cdc(driver).await;
+}
+
+#[cfg(not(feature = "rpc"))]
+async fn usb_cdc(driver: embassy_usb_synopsys_otg::Driver<'static>) {
     let mut config = embassy_usb::Config::new(0x5fc9, 0x0063);
     config.manufacturer = Some("KM003C experimental");
     config.product = Some(if cfg!(feature = "cdc-telemetry") {
@@ -256,11 +279,12 @@ async fn usb_task(
     let mut cd = [0; 256];
     let mut bd = [0; 256];
     let mut control = [0; 64];
-    let mut state = embassy_usb::class::cdc_acm::State::new();
+    let mut state = embassy_usb::class::cdc_acm::device::State::new();
     let mut msos = [0; 0];
     let mut builder =
         embassy_usb::Builder::new(driver, config, &mut cd, &mut bd, &mut msos, &mut control);
-    let serial = embassy_usb::class::cdc_acm::CdcAcmClass::new(&mut builder, &mut state, 64);
+    let serial =
+        embassy_usb::class::cdc_acm::device::CdcAcmClass::new(&mut builder, &mut state, 64);
     let mut device = builder.build();
     unsafe {
         write_volatile(MARKER.add(4), 3);

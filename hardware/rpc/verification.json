@@ -1,0 +1,14 @@
+{
+  "features": [
+    "rpc",
+    "pd-sink",
+    "orientation"
+  ],
+  "readback_verified": true,
+  "bootloader_unchanged": true,
+  "ready_20v": true,
+  "logging_topic_received": true,
+  "rpc_loader_return": true,
+  "json_type_literal_in_image": false,
+  "image_sha256": "a3843b538ac51dbb284fe7a5778dabce9f69de6ef852f8ac115da848fde9d864"
+}

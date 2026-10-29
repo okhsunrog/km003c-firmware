@@ -5,7 +5,7 @@ use core::{
     sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
-use embassy_usb::class::cdc_acm::{Receiver, Sender};
+use embassy_usb::class::cdc_acm::device::{Receiver, Sender};
 use embassy_usb_synopsys_otg::Driver;
 
 pub type Line = heapless::String<512>;

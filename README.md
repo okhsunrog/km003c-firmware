@@ -3,6 +3,13 @@
 Rust 2024 firmware for ChargerLAB POWER-Z KM003C HW2.1 (HC32F460JETA).
 The application starts at `0x4000` and preserves the native bootloader and ICG.
 
+The [native USB postcard-rpc image](docs/rpc.md) now provides binary status,
+measurement topics, active PD control/events and standard logging. Build with
+`--features rpc,pd-sink,orientation`; `bash tools/rpc.sh sink 20` exercises it.
+The unloaded 20 V contract, binary telemetry, logging and loader entry passed
+[hardware testing](hardware/rpc/README.md). Legacy CDC builds remain available
+for the older passive-capture and benchmark tools.
+
 **Display, all four buttons and Embassy USB CDC echo are verified on hardware.**
 The 240×240 ST7789-compatible panel shows an `embedded-graphics` meter UI:
 large voltage, signed current and power, plus temperature, CAL/RAW status and

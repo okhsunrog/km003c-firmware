@@ -40,9 +40,13 @@ impl log::Log for Logger {
         struct Reserved {
             position: u32,
             remaining: usize,
+            #[cfg(feature = "rpc")]
+            line: heapless::String<192>,
         }
         impl Write for Reserved {
             fn write_str(&mut self, s: &str) -> core::fmt::Result {
+                #[cfg(feature = "rpc")]
+                let _ = self.line.push_str(s);
                 for byte in s.bytes() {
                     if self.remaining == 0 {
                         break;
@@ -63,14 +67,17 @@ impl log::Log for Logger {
                 Ok(())
             }
         }
-        let _ = writeln!(
-            Reserved {
-                position: start,
-                remaining: length
-            },
-            "{}",
-            record.args()
-        );
+        let mut reserved = Reserved {
+            position: start,
+            remaining: length,
+            #[cfg(feature = "rpc")]
+            line: heapless::String::new(),
+        };
+        let _ = writeln!(reserved, "{}", record.args());
+        #[cfg(feature = "rpc")]
+        if record.level() <= log::Level::Info {
+            crate::rpc::log(reserved.line);
+        }
     }
     fn flush(&self) {}
 }
