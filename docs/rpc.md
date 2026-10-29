@@ -55,6 +55,13 @@ never enables Rd or sends GoodCRC. Stop ends capture through the same owner as
 active sessions. It uses the interrupt-rearmed buffers and validates CRC before
 publishing packets.
 
+After the RPC migration, passive monitoring has been exercised without a second
+PD participant; receipt of actual pass-through PD traffic remains unverified on
+hardware. An active 20 V session in the later
+[workspace test](../hardware/workspace/README.md) reached Ready but recorded six
+receive overruns. The earlier RPC cleanup session recorded zero, so neither
+capture establishes that startup losses have been eliminated.
+
 [Hardware evidence](../hardware/rpc/README.md) preserves the initial RPC
 acceptance. Offline decoder/time benchmark modes, fixed GetCaps probes and raw
 single-burst test commands have been removed. Decoder regression tests and

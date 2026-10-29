@@ -10,6 +10,12 @@ No external checkout or temporary harness was needed by the tool.
 [monitor.ndjson](monitor.ndjson) records passive capture without attachment.
 [20v.ndjson](20v.ndjson) records the fixed-20-V maneuver, PD Ready, measurements
 and a matching command-ID Stop/Detached. Pixel and other loads were disconnected.
+The final counters are 16 completed bursts, **6 receive overruns**, 0 held-slot
+overruns and 5 short/noise bursts. The counters are emitted at the end of the
+session, so they do not establish exactly when the overruns occurred or which
+PD packets were lost. Reaching Ready does not establish loss-free reception.
+The earlier [RPC cleanup run](../rpc-cleanup/README.md) recorded zero overruns,
+but this later run means startup loss cannot be considered resolved.
 [rejection.ndjson](rejection.ndjson) records a second sink request rejected as
 Busy; the runner still requested Stop and received matching Detached.
 [after-rejection.ndjson](after-rejection.ndjson) records the subsequent capture.
