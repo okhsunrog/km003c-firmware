@@ -65,4 +65,4 @@ completed with full 456896-byte application readback.
 `restore.log` records success. Final loader readback matched the original
 SHA-256 `17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf`.
 
-See [CDC commands and limits](../../docs/cdc-telemetry.md).
+See [CDC commands and limits](https://github.com/okhsunrog/km003c-firmware/blob/e840ec3/docs/cdc-telemetry.md).

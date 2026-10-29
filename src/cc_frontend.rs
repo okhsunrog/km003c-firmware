@@ -22,7 +22,7 @@ struct State {
     enabled: bool,
     result: Result<(), Error>,
     actual: Option<bool>,
-    // Capture, CDC loader entry and the physical Exit path may all wait for
+    // Capture, RPC loader entry and the physical Exit path may all wait for
     // release. A single AtomicWaker would lose one of those notifications.
     waiters: MultiWakerRegistration<3>,
 }

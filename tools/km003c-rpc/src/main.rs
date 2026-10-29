@@ -39,6 +39,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     client.send_resp::<SetStream>(&true).await?;
     let args: Vec<_> = std::env::args().collect();
     let sink = args.get(1).is_some_and(|s| s == "sink");
+    let monitor = args.get(1).is_some_and(|s| s == "monitor");
+    if monitor {
+        let input = match args.get(2).map(String::as_str) {
+            None | Some("auto") => None,
+            Some(s) => Some(s.parse()?),
+        };
+        client
+            .send_resp::<ControlPd>(&PdControl::Monitor { input })
+            .await?
+            .map_err(|e| format!("PD command rejected: {e:?}"))?;
+    }
     if sink {
         let volts = args.get(2).ok_or("usage: sink VOLTS")?.parse()?;
         let result = client
@@ -55,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             msg=logs.recv()=>println!("log {msg:?}"),
         }
     }
-    if sink {
+    if sink || monitor {
         let _ = client.send_resp::<ControlPd>(&PdControl::Stop).await?;
         let end = tokio::time::Instant::now() + std::time::Duration::from_secs(1);
         loop {

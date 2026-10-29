@@ -284,18 +284,7 @@ pub async fn task() {
         });
         return;
     }
-    if cfg!(feature = "measurement-reset-test") {
-        // Sensor-only reset reproduces its documented POR register defaults;
-        // it is not claimed as a cold-start test of the MCU or the whole board.
-        if let Err(error) = sensor.reset() {
-            log::error!("INA229 reset: {error:?}");
-            retain(1, 0xe005);
-            publish(State::BusError);
-            return;
-        }
-        embassy_time::Timer::after_millis(20).await;
-        init_retain(15, 1);
-    }
+
     let before = match sensor.configuration() {
         Ok(config) => config,
         Err(error) => {

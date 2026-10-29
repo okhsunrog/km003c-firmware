@@ -1,0 +1,13 @@
+{
+  "single_application_build": true,
+  "cdc_removed": true,
+  "readback_and_loader_verified": true,
+  "passive_monitor_no_attach": true,
+  "passive_packets_hardware_tested": false,
+  "sink_20v_ready_and_stop": true,
+  "rpc_loader_return": true,
+  "production_decoder_machine_code_unchanged": true,
+  "decoder_bytes": 1364,
+  "decoder_sha256": "38acd922deb6f8b4cd12709b221b151d2d53a4dff2307c57bc2a1816df6e120f",
+  "image_sha256": "4823c420b917a041faec3b90a1010bc1f60ae2fc383dc55841a664d9459d3f18"
+}

@@ -48,6 +48,8 @@ postcard_rpc::topics! {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Schema)]
 pub enum PdControl {
     Stop,
+    /// Passive reception; None follows the active CC selected by ADC.
+    Monitor { input: Option<u8> },
     Sink { volts: u16, seconds: u16 },
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Schema)]

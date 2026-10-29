@@ -18,8 +18,8 @@ fn INT000() {
     }
 }
 
-// Bring-up adapter: clocks/pin mux are explicitly checked against the native
-// loader configuration before allowing the generic driver to touch the core.
+// Configure chip clocks, pin mux and FIFO allocation before starting the
+// Synopsys driver. The native loader can leave peripheral state behind.
 pub unsafe fn driver(buffer: &'static mut [u8]) -> (Driver<'static>, intc::Route) {
     use core::ptr::{read_volatile as r, write_volatile as w};
     unsafe {
@@ -74,7 +74,7 @@ pub unsafe fn driver(buffer: &'static mut [u8]) -> (Driver<'static>, intc::Route
             tx_fifo_count: 6,
             phy_type: PhyType::InternalFullSpeed,
             // Account for RX status/setup overhead in addition to OUT payloads.
-            // EP0 + CDC OUT contribute 32 words; this yields the native 64-word
+            // EP0 + bulk OUT contribute 32 words; this yields the native 64-word
             // RX allocation. A zero reserve reproducibly stalled enumeration.
             extra_rx_fifo_words: 32,
             calculate_trdt_fn: |_| 9,

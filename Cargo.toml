@@ -8,23 +8,6 @@ edition = "2024"
 lto = "thin"
 codegen-units = 1
 
-[features]
-default = []
-rpc = ["measurement"]
-# Hardware candidates are opt-in until separately accepted on this board.
-measurement = []
-measurement-reset-test = ["measurement"]
-pd-capture = []
-# Deliberate, leased CC1/CC2 attach / fixed Get_Source_Capabilities bench probe.
-pd-tx-test = ["pd-capture", "cdc-telemetry"]
-pd-sink = ["pd-tx-test", "dep:usbpd", "dep:usbpd-traits", "dep:uom"]
-pd-bench = ["pd-sink"]
-orientation = []
-# NDJSON measurement/PD diagnostics instead of the byte echo protocol.
-cdc-telemetry = ["measurement"]
-# Compatibility with earlier bring-up scripts; automatic DFU reset is removed.
-manual-ui-test = []
-
 [dependencies]
 cortex-m = "0.7.10"
 cortex-m-rt = "0.7.7"
@@ -45,9 +28,9 @@ km003c-interface = { version = "0.1.0", path = "crates/km003c-interface" }
 log = { version = "0.4.34", default-features = false }
 postcard-rpc = { git = "https://github.com/jamesmunns/postcard-rpc", version = "0.12.1", default-features = false, features = ["embassy-usb-0_6-server"], rev = "2469ebc6" }
 static_cell = "2.1.1"
-uom = { version = "0.36.0", default-features = false, features = ["si", "u32"], optional = true }
-usbpd = { version = "2.0.0", features = ["log"], optional = true }
-usbpd-traits = { version = "2.0.0", optional = true }
+uom = { version = "0.36.0", default-features = false, features = ["si", "u32"] }
+usbpd = { version = "2.0.0", features = ["log"] }
+usbpd-traits = { version = "2.0.0" }
 
 [patch.crates-io]
 embassy-executor-timer-queue = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }

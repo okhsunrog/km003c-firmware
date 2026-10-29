@@ -16,7 +16,6 @@ static LATEST: Mutex<CriticalSectionRawMutex, Cell<Option<Sample>>> = Mutex::new
 static INPUT: AtomicU8 = AtomicU8::new(0);
 static DETACHED_INPUT: AtomicU8 = AtomicU8::new(0);
 static UPDATED: AtomicU32 = AtomicU32::new(0);
-#[cfg(feature = "pd-tx-test")]
 pub fn fresh() -> Option<Sample> {
     let age = (embassy_time::Instant::now().as_millis() as u32)
         .wrapping_sub(UPDATED.load(Ordering::Acquire));
@@ -25,7 +24,6 @@ pub fn fresh() -> Option<Sample> {
 pub fn snapshot() -> Option<Sample> {
     LATEST.lock(Cell::get)
 }
-#[cfg(all(feature = "cdc-telemetry", not(feature = "rpc")))]
 pub fn cc_input() -> Option<u8> {
     match INPUT.load(Ordering::Relaxed) {
         1 => Some(1),
@@ -34,7 +32,6 @@ pub fn cc_input() -> Option<u8> {
     }
 }
 
-#[cfg(feature = "pd-tx-test")]
 pub fn detached_input() -> Option<u8> {
     match DETACHED_INPUT.load(Ordering::Acquire) {
         1 => Some(1),
@@ -55,7 +52,7 @@ fn stop(adc: &pac::Adc1) -> bool {
 
 #[embassy_executor::task]
 pub async fn task() {
-    // This task owns ADC1 and initializes the pads. The opt-in TX probe may
+    // This task owns ADC1 and initializes the pads. The PD transmitter may
     // temporarily switch PA0/PA1 to AF4, restoring analog mode before RX resumes.
     // No later ADC operation writes a pad configuration. CMP1 observes in parallel;
     // its DAC reference does not change CMP.RVADC or the ADC reference buffer.

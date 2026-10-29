@@ -1,25 +1,11 @@
-//! Active bench session: choose CC from ADC while detached, lock it while
+//! Active sink session: choose CC from ADC while detached, lock it while
 //! attached, and recreate the protocol state after a cable disconnect/flip.
-#[cfg(not(feature = "rpc"))]
-use crate::telemetry::Line;
-use crate::{pd_buffered::Buffered, pd_tx, telemetry};
-#[cfg(not(feature = "rpc"))]
-use core::fmt::Write;
+use crate::{pd_buffered::Buffered, pd_tx, rpc_pd as telemetry};
 use embassy_futures::select::{Either, select};
-#[cfg(feature = "rpc")]
 fn report(state: &str, input: u8) {
     telemetry::cc_state(state, input);
 }
-#[cfg(not(feature = "rpc"))]
-fn report(state: &str, input: u8) {
-    let mut line = Line::new();
-    writeln!(
-        line,
-        "{{\"type\":\"pd_cc\",\"state\":\"{state}\",\"input\":{input}}}"
-    )
-    .unwrap();
-    telemetry::emit(line);
-}
+
 pub async fn run(rx: &mut Buffered, volts: u16, seconds: u16) -> Result<(), &'static str> {
     let mut waiting = false;
     loop {

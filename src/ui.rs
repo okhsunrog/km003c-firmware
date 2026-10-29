@@ -1,6 +1,5 @@
 //! Meter screen: large V/A/W values, temperature and calibration state.
 //! Compose changed regions in RAM; input diagnostics stay in logs/retention.
-#[cfg(feature = "measurement")]
 use core::fmt::Write;
 use embassy_hc32::gpio::{InputPin, Port};
 use embedded_graphics::{
@@ -45,7 +44,6 @@ impl DrawTarget for Double<'_> {
 fn label(text: &str) -> Value {
     Value::try_from(text).unwrap()
 }
-#[cfg(feature = "measurement")]
 fn decimal(value: i64, places: u32, unit: &str) -> Value {
     let mut out = Value::new();
     let divisor = 10u64.pow(places);
@@ -115,18 +113,13 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
     aw.lcd_reset().await.unwrap();
     aw.backlight(0).await.unwrap();
     let mut display = unsafe { crate::display::Display::new() };
-    #[cfg(feature = "measurement")]
     {
         let (id, block) = display.factory_settings();
         crate::measurement::factory_settings(id, &block);
     }
-    #[cfg(feature = "orientation")]
     let mut sensor_bus = aw.sensor_bus();
-    #[cfg(feature = "orientation")]
     let mut orientation = crate::orientation::probe(&mut sensor_bus).await;
-    #[cfg(feature = "orientation")]
     let mut rotation = if orientation.is_some() { 3 } else { 0 };
-    #[cfg(feature = "orientation")]
     display.set_rotation(rotation);
     display.init().await;
     display.clear(Rgb565::BLACK).unwrap();
@@ -144,9 +137,7 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
     let (mut previous, mut stable, mut repeats) = (0u8, 0u8, 0u8);
     let (mut lit, mut held_exit) = (false, 0);
     let mut caches: [Option<Value>; 5] = core::array::from_fn(|_| None);
-    #[cfg(feature = "measurement")]
     let mut line_caches: [Option<Value>; 4] = core::array::from_fn(|_| None);
-    #[cfg(feature = "measurement")]
     let mut lines_due = embassy_time::Instant::now();
     unsafe {
         for i in 0..8 {
@@ -155,7 +146,6 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
     }
     log::info!("Meter UI ready; hold EXIT PB7 for loader");
     loop {
-        #[cfg(feature = "orientation")]
         if let Some(sensor) = orientation.as_mut() {
             let next = sensor.poll(&mut sensor_bus).await;
             if next != rotation {
@@ -165,7 +155,6 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
                 // when a debounced quarter-turn changes the complete layout.
                 display.clear(Rgb565::BLACK).unwrap();
                 caches.fill(None);
-                #[cfg(feature = "measurement")]
                 line_caches.fill(None);
                 chrome(&mut display, &mut tile);
                 log::info!("Orientation quarter-turn={rotation}");
@@ -200,7 +189,6 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
                 }
             }
         }
-        #[cfg(feature = "measurement")]
         let values = match crate::measurement::snapshot() {
             crate::measurement::State::Sample(sample) => {
                 let calibrated = crate::measurement::corrected(sample);
@@ -239,14 +227,6 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
                 label("ERROR"),
             ],
         };
-        #[cfg(not(feature = "measurement"))]
-        let values = [
-            label("NO DATA"),
-            label("-- A"),
-            label("-- W"),
-            label("-- C"),
-            label("OFF"),
-        ];
         row(
             &mut display,
             &mut tile,
@@ -274,9 +254,7 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
         if caches[3].as_ref() != Some(&values[3]) {
             tile.reset(Size::new(144, 18), Rgb565::BLACK);
             let mut header = Value::new();
-            #[cfg(feature = "measurement")]
             write!(header, "RUST {}", values[3]).unwrap();
-            #[cfg(not(feature = "measurement"))]
             header.push_str("KM003C / Rust").unwrap();
             Text::new(
                 &header,
@@ -300,7 +278,6 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
             upload(&mut display, &tile, Point::new(164, 8));
             caches[4] = Some(values[4].clone());
         }
-        #[cfg(feature = "measurement")]
         if embassy_time::Instant::now() >= lines_due {
             let sample = crate::lines::snapshot();
             for (i, name) in ["CC1", "CC2", "D+ ", "D- "].into_iter().enumerate() {

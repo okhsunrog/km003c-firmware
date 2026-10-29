@@ -6,64 +6,21 @@ BMC transitions, and uses CMP1/DAC1/timer capture for RX. No dedicated HC32 PD
 peripheral or automatic hardware GoodCRC engine has been identified. The USB FS
 PHY on PA11/PA12 is a separate peripheral.
 
-The opt-in `pd-tx-test` feature now has a **hardware-tested CC1/CC2 transmitter**:
-an unloaded charger acknowledges the fixed Get_Source_Capabilities packet with
-GoodCRC. PB6 enables the CC1 sink attachment path. Pixel remains disconnected.
-The `pd-sink` feature now runs the crates.io `usbpd` 2.0.0 sink stack with
-software GoodCRC, message IDs, retries and Request/Accept/PS_RDY negotiation.
-Fixed 5/9/12/15/20 V contracts were accepted on CC1 with an unloaded charger.
-CC2 has also negotiated 20 V, with ADC-driven selection and a fresh stack session
-after a cable flip. PPS and EPR policy are not implemented. Passive monitoring
-stays separate. [CC2 acceptance](../hardware/cc2/README.md) preserves the new run.
+The firmware runs the crates.io `usbpd` 2.0.0 sink stack with software GoodCRC,
+message IDs, retries and Request/Accept/PS_RDY negotiation. Fixed
+5/9/12/15/20 V contracts were accepted on CC1 with an unloaded charger, and CC2
+also negotiated 20 V. ADC selects the detached line; the stack is recreated
+after a cable flip. [CC2 acceptance](../hardware/cc2/README.md) preserves those
+measurements. PPS and EPR policy remain unimplemented.
 
-## Hardware-tested probe
+Use `bash tools/rpc.sh sink 20` for an explicit unloaded-charger session, or
+`bash tools/rpc.sh monitor auto` for passive reception. Acquisition and active
+PD both use the RPC owner; passive reception never enables Rd or sends GoodCRC.
+[RPC documentation](rpc.md) describes commands, topics and scheduling.
 
-Build with `--features pd-tx-test,orientation,manual-ui-test`. Nothing drives CC
-until an explicit CDC command. `pd attach 1` requires CC1; `pd attach auto`
-selects CC1 or CC2 from two consecutive ADC scans. The command requires a fresh
-line sample, unloaded VBUS below 5.5 V, one CC above 2.5 V and the other below
-0.4 V. RX is armed before enabling Rd for five seconds. These preconditions
-match the tested charger's detached state; they are not a general Type-C attach
-algorithm.
-
-`pd getcaps` permits exactly one SOP Get_Source_Capabilities packet (`87 00`,
-PD3.0 sink/UFP, MessageID 0) during that lease. It requires the selected CC in
-0.4..2.15 V,
-no active XTAL32 on PC14/15 and an idle receiver. There are no arbitrary-frame,
-Request, EPR or reset commands. This probe cannot select a supply voltage.
-
-TX uses a dedicated static buffer, DMA1 CH1 and TimerA2. CC1 uses PA0 AF4,
-PWM channel 1 and PC14; CC2 uses PA1 AF4, channel 2 and PC15. The DMA IRQ
-holds the final interval; the following overflow IRQ disables the selected
-OUTEN/gate, restores the PA pin's analog mode and rearms RX immediately.
-ADC1's watchdog stays off.
-IRQ transitions and timeout cleanup share a critical section. TX uses a
-five-millisecond `embassy_time::with_timeout`; a drop guard also releases an
-unfinished waveform on cancellation. A separate async lease task releases CC
-after five seconds (session duration plus ten seconds for an active sink), using
-a generation
-check so an older deadline cannot detach a renewed lease. These timers require
-executor progress. `pd stop`, actual USB disconnect and fault/reset also release
-the controls. Dropping a host interface alone need not cause a USB disconnect.
-DMA storage stays valid even on failure; another transfer cannot reuse it
-without proving CH1 stopped.
-
-The hardware test observed CC1 changing from about 3.18 V to 1.63 V and VBUS
-rising to about 4.99 V. The charger returned CRC-valid SOP GoodCRC `a1 01`,
-MessageID 0, in each TX run. PB6 low restored the detached state and VBUS near
-zero. Source Capabilities retry because this probe does not acknowledge them or
-request a contract. ACK reception establishes a working transmitter with this
-charger; it does not measure analog impedance, BMC timing compliance or
-microsecond turnaround. Captured `end_us` now has approximately 30.5 µs clock resolution.
-
-[Captures, image identity, counters and recovery evidence](../hardware/pd-sink/README.md)
-include a host-read stall across lease expiry. Forced CDC backpressure can drop
-records and leave an interrupted line; it is separate from DMA capture loss.
-
-```sh
-uv run tools/bench.py attach --pd 1 --seconds 8 --cc1-probe attach
-uv run tools/bench.py tx --pd 1 --seconds 8 --cc1-probe getcaps
-```
+The original fixed Get_Source_Capabilities probe, CDC commands and standalone
+benchmark programs have been removed. Historical captures below establish the
+hardware behavior; commands in archived hardware records describe those versions.
 
 ## Verified 2.0.7 code
 
@@ -207,15 +164,6 @@ behavior must be accounted for and checked electrically before TX acceptance.
 Matching the waveform words does not establish amplitude, impedance or timing
 on CC.
 
-```sh
-uv run tools/native_pd_vectors.py --output native-pd207.tsv
-cargo test --manifest-path crates/km003c-drivers/Cargo.toml --locked \
-  --all-features --target x86_64-unknown-linux-gnu
-```
-
-`KM003C_STOCK_207` overrides the script's cached default input path. It refuses
-any binary whose SHA-256 differs from the preserved installed 2.0.7 image.
-
 ## Running the usbpd sink
 
 `usbpd` **2.0.0 from crates.io** is an optional `km003c-drivers` dependency.
@@ -239,24 +187,22 @@ The adapter uses these ownership boundaries:
   RX→TX, awaits final timer completion, releases outputs and restores RX. DMA
   must settle before memory reuse, including cancellation/error paths.
 - Fast receive/protocol work runs outside thread-mode UI/JSON formatting. Software
-  GoodCRC must not depend on CDC queues or the 20 ms ADC polling interval.
+  GoodCRC must not depend on USB queues or the 20 ms ADC polling interval.
 - `wait_for_vbus` uses the INA229 measurement, while CC attach/termination policy
   is separately owned. Automatic receiver mux changes must not race a TX frame.
 - An explicit DPM selects an advertised fixed PDO at 100 mA, falling back to
   5 V when unavailable. It does not use the crate's highest-current default.
 
 ```sh
-cargo build --release --locked --features pd-sink,orientation,manual-ui-test
-uv run tools/bench.py trigger-20v --sink 20 --seconds 10
+cargo build --release --locked
+bash tools/rpc.sh sink 20
 ```
 
-CDC accepts `pd sink 5`, `9`, `12`, `15` or `20`, with an optional duration in
-seconds (1..600, default 20). Each explicit session starts on the uniquely
-detected detached CC. The selected input/PWM/gate stay locked while attached;
-three invalid 20 ms observations end that attachment. The owner drops the
-stack, releases both Rd paths, selects the new detached orientation and creates
-a new sink with fresh protocol state. The original overall session deadline
-still applies. No session starts on USB enumeration.
+RPC accepts a `Sink` request with a fixed voltage and duration in seconds
+(1..600). The selected input/PWM/gate stay locked while attached. A stable
+physical disconnect ends that attachment, releases both Rd paths and permits
+ADC to select the next line. Each attachment starts fresh protocol state; the
+overall session deadline remains in force. No session starts at USB enumeration.
 
 CC1 Rd uses PB6 high; release drives it low. CC2 uses AW9523 P0_3: first latch
 low, then enable GPIO output; release selects input/high-Z. P1_6 stays unchanged.
@@ -269,16 +215,10 @@ handlers stop direct TX immediately but cannot perform async I2C, so external
 CC2 Rd release cannot be guaranteed during a panic or a persistent bus failure.
 
 The independent CC lease expires ten seconds beyond the requested session
-duration (30 seconds by default). It queues expander release in addition to
+duration. It queues expander release in addition to
 stopping direct outputs. These are task-driven bench bounds, not a complete
 Type-C connection manager or a hardware watchdog. `pd stop`, Exit and `loader`
-retain recovery behavior. For a longer orientation check:
-
-```sh
-uv run tools/bench.py orientation --sink 20 --sink-seconds 300 --seconds 290
-```
-
-## Timing and profiling
+retain recovery behavior. ## Timing and profiling
 
 The [TimerA1 HAL backend](time-driver.md) supplies 32,768 logical ticks/s using
 free-running counter/compare alarms. The former DWT-based one-millisecond

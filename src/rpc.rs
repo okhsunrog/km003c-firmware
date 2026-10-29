@@ -26,15 +26,7 @@ impl SpawnContext for Context {
     fn spawn_ctxt(&mut self) {}
 }
 fn pd_control(_: &mut Context, _: VarHeader, command: PdControl) -> ControlResult {
-    #[cfg(feature = "pd-sink")]
-    {
-        crate::rpc_pd::control(command)
-    }
-    #[cfg(not(feature = "pd-sink"))]
-    {
-        let _ = command;
-        Err(ControlError::Invalid)
-    }
+    crate::rpc_pd::control(command)
 }
 fn status(_: &mut Context, _: VarHeader, _: ()) -> Status {
     Status {
@@ -89,7 +81,6 @@ pub async fn run(driver: Driver<'static>, spawner: embassy_executor::Spawner) {
     let serve = async {
         loop {
             let _ = server.run().await;
-            #[cfg(feature = "pd-sink")]
             let _ = crate::rpc_pd::control(PdControl::Stop);
             STREAM.store(false, Ordering::Relaxed);
             embassy_time::Timer::after_millis(100).await;
@@ -106,7 +97,6 @@ pub async fn run(driver: Driver<'static>, spawner: embassy_executor::Spawner) {
         }
     };
     let pd = async {
-        #[cfg(feature = "pd-sink")]
         {
             let mut seq = 0i32;
             loop {
@@ -119,8 +109,6 @@ pub async fn run(driver: Driver<'static>, spawner: embassy_executor::Spawner) {
                 seq = seq.wrapping_add(1);
             }
         }
-        #[cfg(not(feature = "pd-sink"))]
-        core::future::pending::<()>().await;
     };
     embassy_futures::join::join5(usb.run(), serve, publish(sender.clone()), logging, pd).await;
 }

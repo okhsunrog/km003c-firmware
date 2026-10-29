@@ -16,7 +16,7 @@ fn INT030() {
     unsafe { EXECUTOR.on_interrupt() };
 }
 pub fn start() {
-    // Software-pended executor, same priority as the accepted CDC PD owner.
+    // Software-pended PD executor; timer/DMA IRQs may preempt the decoder.
     unsafe {
         (0x400510d4 as *mut u32).write_volatile(0x1ff);
         cortex_m::Peripherals::steal()
@@ -26,28 +26,31 @@ pub fn start() {
     EXECUTOR.start(interrupt::INT030).spawn(task().unwrap());
 }
 pub fn control(command: PdControl) -> ControlResult {
-    if let PdControl::Sink { volts, seconds } = command {
-        if BUSY.load(core::sync::atomic::Ordering::Acquire) {
-            return Err(ControlError::Busy);
-        }
-        if ![5, 9, 12, 15, 20].contains(&volts) || !(1..=600).contains(&seconds) {
+    match command {
+        PdControl::Sink { volts, seconds }
+            if ![5, 9, 12, 15, 20].contains(&volts) || !(1..=600).contains(&seconds) =>
+        {
             return Err(ControlError::Invalid);
         }
-    } else {
-        crate::pd_tx::release();
-    }
-    if matches!(command, PdControl::Sink { .. }) {
-        if BUSY.swap(true, core::sync::atomic::Ordering::AcqRel) {
-            return Err(ControlError::Busy);
+        PdControl::Monitor { input: Some(n) } if n != 1 && n != 2 => {
+            return Err(ControlError::Invalid);
         }
-        if COMMANDS.try_send(command).is_err() {
+        PdControl::Stop => {
+            crate::pd_tx::release();
+        }
+        _ => {}
+    }
+    if !matches!(command, PdControl::Stop) && BUSY.swap(true, core::sync::atomic::Ordering::AcqRel)
+    {
+        return Err(ControlError::Busy);
+    }
+    if COMMANDS.try_send(command).is_err() {
+        if !matches!(command, PdControl::Stop) {
             BUSY.store(false, core::sync::atomic::Ordering::Release);
-            return Err(ControlError::Busy);
         }
-        Ok(())
-    } else {
-        COMMANDS.try_send(command).map_err(|_| ControlError::Busy)
+        return Err(ControlError::Busy);
     }
+    Ok(())
 }
 pub fn state(state: PdState, value: u32) {
     let _ = EVENTS.try_send(PdEvent::State { state, value });
@@ -109,18 +112,23 @@ pub fn sink_tx(data: &[u8]) {
 async fn task() {
     let receiver = match unsafe { Receiver::new(Input::Cmp1Inp1, 0x20) } {
         Ok(r) => r,
-        Err(_) => {
+        Err(error) => {
+            log::error!("PD initialization failed: {error}");
             state(PdState::Failed, 0);
             return;
         }
     };
     let mut rx = Buffered::new(receiver);
     loop {
-        match COMMANDS.receive().await {
-            PdControl::Stop => {}
+        let command = COMMANDS.receive().await;
+        match command {
+            PdControl::Stop => {
+                if crate::pd_tx::release_and_wait().await.is_err() || !rx.stop() {
+                    state(PdState::Failed, 0);
+                }
+                continue;
+            }
             PdControl::Sink { volts, seconds } => {
-                // A new command cancels this session; only Stop is accepted while
-                // active. The handler rejects replacement requests below.
                 let _ = select(
                     COMMANDS.receive(),
                     embassy_time::with_timeout(
@@ -130,10 +138,13 @@ async fn task() {
                 )
                 .await;
             }
+            PdControl::Monitor { input } => {
+                let _ = select(COMMANDS.receive(), monitor(&mut rx, input)).await;
+            }
         }
         let released = crate::pd_tx::release_and_wait().await;
+        let stopped = rx.stop();
         BUSY.store(false, core::sync::atomic::Ordering::Release);
-        rx.stop();
         let s = rx.stats();
         let _ = EVENTS.try_send(PdEvent::Stats {
             counters: [
@@ -152,12 +163,58 @@ async fn task() {
             ],
         });
         state(
-            if released.is_ok() {
+            if released.is_ok() && stopped {
                 PdState::Detached
             } else {
                 PdState::Failed
             },
             0,
         );
+    }
+}
+/// Passive monitoring never attaches Rd or acknowledges packets. Reconfiguration
+/// happens through the capture owner's stop/start boundary, never during TX.
+async fn monitor(rx: &mut Buffered, fixed: Option<u8>) {
+    let mut input = fixed.or_else(crate::lines::cc_input).unwrap_or(1);
+    let select_input = |n| {
+        if n == 2 {
+            Input::Cmp1Inp2
+        } else {
+            Input::Cmp1Inp1
+        }
+    };
+    if !rx.start(select_input(input)) {
+        state(PdState::Failed, 0);
+        return;
+    }
+    loop {
+        if fixed.is_none()
+            && let Some(next) = crate::lines::cc_input()
+            && next != input
+        {
+            if !rx.switch_input(select_input(next)) {
+                state(PdState::Failed, 0);
+                return;
+            }
+            input = next;
+        }
+        if let Some(frame) = rx.frame() {
+            let meta = frame.meta;
+            if meta.error == 0 {
+                let mut decoder = km003c_drivers::pd::Decoder::new(20, 5).unwrap();
+                for &tick in &frame.samples()[frame.samples().len().min(1)..] {
+                    if let Ok(Some(event)) = decoder.push_interval(tick) {
+                        sink_rx(event, meta);
+                    }
+                }
+            }
+            drop(frame);
+        } else {
+            if rx.faulted() {
+                state(PdState::Failed, 0);
+                return;
+            }
+            let _ = select(rx.wait_ready(), embassy_time::Timer::after_millis(20)).await;
+        }
     }
 }

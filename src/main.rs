@@ -6,40 +6,21 @@ use cortex_m_rt::{entry, exception};
 use embassy_hc32::pac::interrupt;
 
 mod aw9523;
-#[cfg(feature = "pd-tx-test")]
 mod cc_frontend;
 mod display;
-#[cfg(feature = "measurement")]
 mod lines;
-#[cfg(feature = "measurement")]
 pub mod measurement;
-#[cfg(feature = "orientation")]
 mod orientation;
-#[cfg(feature = "pd-bench")]
-mod pd_bench;
-#[cfg(all(feature = "pd-capture", feature = "cdc-telemetry"))]
 mod pd_buffered;
-#[cfg(feature = "pd-capture")]
-pub mod pd_capture;
-#[cfg(feature = "pd-sink")]
+mod pd_capture;
 mod pd_fast;
-#[cfg(feature = "pd-sink")]
 mod pd_session;
-#[cfg(feature = "pd-sink")]
 mod pd_sink;
-#[cfg(feature = "pd-tx-test")]
 mod pd_tx;
 mod retention_log;
-#[cfg(feature = "rpc")]
 mod rpc;
-#[cfg(all(feature = "rpc", feature = "pd-sink"))]
 mod rpc_pd;
-#[cfg(all(feature = "cdc-telemetry", not(feature = "rpc")))]
-mod telemetry;
-#[cfg(all(feature = "rpc", feature = "pd-sink"))]
-use rpc_pd as telemetry;
-#[cfg(feature = "pd-bench")]
-mod time_stats;
+
 mod ui;
 mod usb;
 const MARKER: *mut u32 = 0x200f_0fc0 as *mut u32;
@@ -53,15 +34,7 @@ const fn metadata() -> [u8; 64] {
         data[i] = 0xff;
         i += 1;
     }
-    let fields: [&[u8]; 3] = [
-        b"KM003C",
-        if cfg!(feature = "measurement") {
-            b"rust-adc"
-        } else {
-            b"rust-ui"
-        },
-        b"2026.10.28",
-    ];
+    let fields: [&[u8]; 3] = [b"KM003C", b"rust-rpc", b"2026.10.28"];
     let mut field = 0;
     while field < 3 {
         i = 0;
@@ -111,7 +84,6 @@ core::arch::global_asm!(
 
 fn return_to_loader(status: u32) -> ! {
     cortex_m::interrupt::disable();
-    #[cfg(feature = "pd-tx-test")]
     pd_tx::release();
     unsafe {
         write_volatile(MARKER.add(3), status);
@@ -124,7 +96,6 @@ fn return_to_loader(status: u32) -> ! {
 /// Normal recovery can await the external expander before resetting the MCU.
 /// Fault handlers cannot run I2C; they still stop the direct TX hardware above.
 async fn enter_loader(status: u32) -> Result<(), &'static str> {
-    #[cfg(feature = "pd-tx-test")]
     pd_tx::release_and_wait().await?;
     return_to_loader(status)
 }
@@ -145,7 +116,6 @@ fn main() -> ! {
     unsafe {
         write_volatile(0x40050804 as *mut u32, 0x77);
         // DDL 3.3.0 BSP_CLK_Init at 200 MHz: SRAMH=0 waits, SRAM12/3/R=1.
-        // The earlier all-2 setting unnecessarily stalled the PD hot path.
         write_volatile(0x40050800 as *mut u32, 0x11001111);
         write_volatile(0x40050804 as *mut u32, 0x76);
     }
@@ -169,7 +139,6 @@ fn main() -> ! {
     let hclk = clocks.hclk;
     assert_eq!(hclk, 192_000_000);
     log::info!("Clock readback: {clocks:?}");
-    #[cfg(feature = "pd-sink")]
     pd_sink::init();
     // No timer pin/output is enabled. PCLK1 is fixed after startup.
     unsafe {
@@ -198,7 +167,6 @@ fn main() -> ! {
         usb_start.elapsed().as_millis()
     );
     unsafe { write_volatile(MARKER.add(4), 2) };
-    #[cfg(feature = "pd-tx-test")]
     cc_frontend::request(false);
     static EXECUTOR: static_cell::StaticCell<embassy_executor::Executor> =
         static_cell::StaticCell::new();
@@ -206,31 +174,15 @@ fn main() -> ! {
         cortex_m::interrupt::enable();
     }
     EXECUTOR.init(embassy_executor::Executor::new()).run(|s| {
-        #[cfg(feature = "measurement")]
         measurement::init();
         s.spawn(usb_task(usb_driver, usb_route, s).unwrap());
-        #[cfg(feature = "pd-tx-test")]
         s.spawn(pd_tx::lease_task().unwrap());
         s.spawn(ui::task(aw).unwrap());
-        #[cfg(feature = "pd-tx-test")]
         s.spawn(cc_frontend::task(aw).unwrap());
-        #[cfg(feature = "measurement")]
         {
             s.spawn(measurement::task().unwrap());
             s.spawn(lines::task().unwrap());
         }
-        #[cfg(all(feature = "cdc-telemetry", not(feature = "rpc")))]
-        s.spawn(telemetry::measurements().unwrap());
-        #[cfg(all(
-            feature = "cdc-telemetry",
-            feature = "pd-capture",
-            not(feature = "rpc")
-        ))]
-        {
-            telemetry::start_capture_task();
-            s.spawn(telemetry::pd_reports().unwrap());
-        }
-        #[cfg(all(feature = "rpc", feature = "pd-sink"))]
         rpc_pd::start();
     })
 }
@@ -239,16 +191,10 @@ fn main() -> ! {
 // wrap-safe clock/queue handler. SysTick stays disabled after pre-init.
 #[interrupt]
 fn INT080() {
-    #[cfg(feature = "pd-bench")]
-    time_stats::irq(0);
-    #[cfg(not(feature = "pd-bench"))]
     embassy_hc32::time_driver::on_interrupt();
 }
 #[interrupt]
 fn INT081() {
-    #[cfg(feature = "pd-bench")]
-    time_stats::irq(1);
-    #[cfg(not(feature = "pd-bench"))]
     embassy_hc32::time_driver::on_interrupt();
 }
 
@@ -258,74 +204,8 @@ async fn usb_task(
     _route: embassy_hc32::intc::Route,
     _spawner: embassy_executor::Spawner,
 ) {
-    #[cfg(feature = "rpc")]
     {
         rpc::run(driver, _spawner).await;
-    }
-    #[cfg(not(feature = "rpc"))]
-    usb_cdc(driver).await;
-}
-
-#[cfg(not(feature = "rpc"))]
-async fn usb_cdc(driver: embassy_usb_synopsys_otg::Driver<'static>) {
-    let mut config = embassy_usb::Config::new(0x5fc9, 0x0063);
-    config.manufacturer = Some("KM003C experimental");
-    config.product = Some(if cfg!(feature = "cdc-telemetry") {
-        "KM003C Rust telemetry"
-    } else {
-        "KM003C Rust USB test"
-    });
-    config.serial_number = Some("rust-bringup");
-    let mut cd = [0; 256];
-    let mut bd = [0; 256];
-    let mut control = [0; 64];
-    let mut state = embassy_usb::class::cdc_acm::device::State::new();
-    let mut msos = [0; 0];
-    let mut builder =
-        embassy_usb::Builder::new(driver, config, &mut cd, &mut bd, &mut msos, &mut control);
-    let serial =
-        embassy_usb::class::cdc_acm::device::CdcAcmClass::new(&mut builder, &mut state, 64);
-    let mut device = builder.build();
-    unsafe {
-        write_volatile(MARKER.add(4), 3);
-    }
-    #[cfg(feature = "cdc-telemetry")]
-    {
-        let (sender, receiver) = serial.split();
-        embassy_futures::join::join3(
-            device.run(),
-            telemetry::receive(receiver),
-            telemetry::send(sender),
-        )
-        .await;
-    }
-    #[cfg(not(feature = "cdc-telemetry"))]
-    {
-        let (mut sender, mut receiver) = serial.split();
-        let queue = embassy_sync::channel::Channel::<
-            embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
-            ([u8; 64], usize),
-            8,
-        >::new();
-        let receive = async {
-            loop {
-                receiver.wait_connection().await;
-                let mut data = [0; 64];
-                while let Ok(n) = receiver.read_packet(&mut data).await {
-                    queue.send((data, n)).await;
-                }
-            }
-        };
-        let send = async {
-            loop {
-                let (data, n) = queue.receive().await;
-                sender.wait_connection().await;
-                if sender.write_packet(&data[..n]).await.is_err() {
-                    log::warn!("CDC send interrupted by disconnect");
-                }
-            }
-        };
-        embassy_futures::join::join3(device.run(), receive, send).await;
     }
 }
 

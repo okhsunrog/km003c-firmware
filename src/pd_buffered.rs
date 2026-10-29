@@ -93,12 +93,9 @@ fn arm(slot: usize) {
     pd_capture::write8(0x40015481, 0x10);
     pd_capture::write16(0x4004a000, pd_capture::read16(0x4004a000) | 0x60);
 }
-pub fn enabled() -> bool {
-    ENABLED.load(Ordering::Acquire)
-}
-/// Rearm immediately after the final TX interval, before task/JSON scheduling.
+
+/// Rearm immediately after the final TX interval, before task/USB scheduling.
 /// TX exclusively owns the stopped timer here; pool ownership is unchanged.
-#[cfg(feature = "pd-tx-test")]
 pub fn resume_after_tx() {
     STATE.lock(|cell| {
         if let Some(s) = cell.borrow_mut().as_mut() {
@@ -201,7 +198,6 @@ impl Buffered {
     }
     /// Reselect a passive input without resetting cumulative loss counters.
     /// Any old queued/partial burst is discarded explicitly, never mislabeled.
-    #[cfg(not(feature = "rpc"))]
     pub fn switch_input(&mut self, input: Input) -> bool {
         self.restart(input, false)
     }
@@ -286,24 +282,6 @@ impl Buffered {
     }
     pub fn faulted(&self) -> bool {
         STATE.lock(|c| c.borrow().as_ref().is_some_and(|s| !s.running))
-    }
-    #[cfg(not(feature = "rpc"))]
-    pub async fn once(&mut self, buffer: &mut [u16]) -> Result<usize, pd_capture::Error> {
-        if !self.stop() {
-            return Err(pd_capture::Error::Dma(embassy_hc32::dma::Error::NotStopped));
-        }
-        ENABLED.store(false, Ordering::Release);
-        self.receiver
-            .capture(buffer, embassy_time::Duration::from_secs(15))
-            .await
-    }
-    #[cfg(not(feature = "rpc"))]
-    pub fn input(&mut self, input: Input) {
-        self.receiver.select_input(input);
-    }
-    #[cfg(not(feature = "rpc"))]
-    pub fn diagnostics(&self) -> [u32; 12] {
-        self.receiver.diagnostics()
     }
 }
 impl Drop for Buffered {

@@ -1,6 +1,6 @@
 //! Selected-CC software PHY adapter for the crates.io usbpd sink stack.
 //! The stack owns GoodCRC, IDs, retries, reset handling and power negotiation.
-use crate::{pd_buffered::Buffered, pd_tx, telemetry};
+use crate::{pd_buffered::Buffered, pd_tx, rpc_pd as telemetry};
 use core::sync::atomic::{AtomicU32, Ordering};
 use km003c_drivers::pd::{Event, Sop, tx::Frame};
 use uom::si::{electric_current::milliampere, electric_potential::millivolt};

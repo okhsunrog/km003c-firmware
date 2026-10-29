@@ -114,7 +114,7 @@ cargo build --release --locked --features pd-capture
 Alone, this compiles `pd_capture::Receiver` without starting it. Adding
 `cdc-telemetry` exposes command-driven passive bursts: `pd 1` / `pd 2` configure
 PA0/PA1 as analog and select CMP1_INP1/2 with native DAC code `0x20`.
-See [CDC protocol and hardware limits](cdc-telemetry.md). The interface requires
+See [CDC protocol and hardware limits](https://github.com/okhsunrog/km003c-firmware/blob/e840ec3/docs/cdc-telemetry.md). The interface requires
 exclusive TMRA2, CMP1/DAC1, DCU1, DMA1 and corresponding AOS/IRQ resources.
 It does not configure PA0/PA1 TX, PC14/PC15, CC termination or GPIO switches.
 External comparator VCOUT and timer waveform outputs are disabled.

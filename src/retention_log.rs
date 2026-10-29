@@ -13,7 +13,6 @@ impl log::Log for Logger {
     fn log(&self, record: &log::Record<'_>) {
         // The software GoodCRC path must not format verbose stack messages
         // before starting TX. Packet diagnostics are queued by the board driver.
-        #[cfg(feature = "pd-sink")]
         if record.target().starts_with("usbpd") && record.level() > log::Level::Warn {
             return;
         }
@@ -40,12 +39,10 @@ impl log::Log for Logger {
         struct Reserved {
             position: u32,
             remaining: usize,
-            #[cfg(feature = "rpc")]
             line: heapless::String<192>,
         }
         impl Write for Reserved {
             fn write_str(&mut self, s: &str) -> core::fmt::Result {
-                #[cfg(feature = "rpc")]
                 let _ = self.line.push_str(s);
                 for byte in s.bytes() {
                     if self.remaining == 0 {
@@ -70,11 +67,9 @@ impl log::Log for Logger {
         let mut reserved = Reserved {
             position: start,
             remaining: length,
-            #[cfg(feature = "rpc")]
             line: heapless::String::new(),
         };
         let _ = writeln!(reserved, "{}", record.args());
-        #[cfg(feature = "rpc")]
         if record.level() <= log::Level::Info {
             crate::rpc::log(reserved.line);
         }

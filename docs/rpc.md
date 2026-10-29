@@ -1,13 +1,12 @@
 # Native USB postcard-rpc
 
-The `rpc,pd-sink,orientation` image uses a vendor bulk interface rather than CDC.
+The firmware uses a vendor bulk interface rather than CDC.
 Commands and measurements/PD events are postcard binary messages with shared
 schemas in `crates/km003c-interface`. JSON/hex formatting is absent from this
-image; the previous CDC image remains selectable for older bring-up tools.
-The default feature set is unchanged: select the RPC image explicitly.
+image. CDC, NDJSON and the Python USB clients have been removed.
 
 ```sh
-cargo build --release --locked --features rpc,pd-sink,orientation
+cargo build --release --locked
 bash tools/rpc.sh
 bash tools/rpc.sh sink 20
 bash tools/rpc.sh loader
@@ -48,12 +47,15 @@ client subscribes to measurements, PD events and logging before starting work.
 The upstream postcard-rpc revision is pinned to `2469ebc6`; the published 0.12.1
 lacks the Embassy 0.6 backend. This upstream revision supports driver 0.2 rather
 than pinning 0.2.0. Embassy USB, sync and time packages are patched to the already
-used `c2413d5` revision to keep their driver/mutex/timer types consistent. The
-CDC compatibility code uses that revision's `cdc_acm::device` module.
+used `c2413d5` revision to keep their driver/mutex/timer types consistent.
 
-[Hardware evidence](../hardware/rpc/README.md) verifies binary measurement,
-logging, 20 V negotiation, Stop and native-loader entry. Passive capture commands,
-raw-edge upload and decoder/time benchmark controls still use the legacy CDC
-image; they have not been migrated into RPC. Do not combine `rpc` with
-`pd-bench`. Accelerometer rotation continues locally; its separate diagnostic
-topic is not yet part of this interface.
+`bash tools/rpc.sh monitor auto` starts passive capture with ADC-based CC
+selection; `monitor 1` or `monitor 2` fixes the receiver input. Passive capture
+never enables Rd or sends GoodCRC. Stop ends capture through the same owner as
+active sessions. It uses the interrupt-rearmed buffers and validates CRC before
+publishing packets.
+
+[Hardware evidence](../hardware/rpc/README.md) preserves the initial RPC
+acceptance. Offline decoder/time benchmark modes, fixed GetCaps probes and raw
+single-burst test commands have been removed. Decoder regression tests and
+historical measurements remain available in the driver crate and documentation.

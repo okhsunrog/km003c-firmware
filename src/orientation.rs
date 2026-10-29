@@ -77,11 +77,3 @@ impl Controller {
         s.rotation
     }
 }
-#[cfg(all(feature = "cdc-telemetry", not(feature = "rpc")))]
-pub fn emit() {
-    use core::fmt::Write;
-    let s = STATE.lock(Cell::get);
-    let mut line = crate::telemetry::Line::new();
-    writeln!(line,"{{\"type\":\"accel\",\"id\":{},\"source\":{},\"xyz_mg\":{:?},\"rotation\":{},\"count\":{},\"error\":{}}}",s.id,s.source,s.xyz_mg,s.rotation,s.count,s.error).unwrap();
-    crate::telemetry::emit(line);
-}

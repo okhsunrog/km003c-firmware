@@ -8,16 +8,6 @@ core::arch::global_asm!(
     d=const symbols::WORDS[3], e=const symbols::WORDS[4], f=const symbols::WORDS[5], g=const symbols::WORDS[6],
 );
 core::arch::global_asm!(include_str!("pd_symbols.S"), options(raw));
-core::arch::global_asm!(
-    ".equ KM_PD_B0,{a}",".equ KM_PD_B1,{b}",".equ KM_PD_B2,{c}",".equ KM_PD_B3,{d}",
-    ".equ KM_PD_B4,{e}",".equ KM_PD_B5,{f}",".equ KM_PD_B6,{g}",".equ KM_PD_B7,{h}",
-    ".equ KM_PD_B8,{i}",".equ KM_PD_B9,{j}",".equ KM_PD_B10,{k}",".equ KM_PD_B11,{l}",
-    ".equ KM_PD_B12,{m}",".equ KM_PD_B13,{n}",".equ KM_PD_B14,{o}",".equ KM_PD_B15,{p}",
-    a=const symbols::BATCH[0],b=const symbols::BATCH[1],c=const symbols::BATCH[2],d=const symbols::BATCH[3],
-    e=const symbols::BATCH[4],f=const symbols::BATCH[5],g=const symbols::BATCH[6],h=const symbols::BATCH[7],
-    i=const symbols::BATCH[8],j=const symbols::BATCH[9],k=const symbols::BATCH[10],l=const symbols::BATCH[11],
-    m=const symbols::BATCH[12],n=const symbols::BATCH[13],o=const symbols::BATCH[14],p=const symbols::BATCH[15],
-);
 const fn nibble_word(i: usize) -> u32 {
     u32::from_le_bytes([
         symbols::NIBBLES[4 * i],
@@ -65,8 +55,3 @@ pub fn decode_observed(data: &[u16], stamp: &mut [u32; 5]) -> Result<Option<Even
     stamp[4] = unsafe { (0xe0001004 as *const u32).read_volatile() };
     result
 }
-
-#[cfg(feature = "pd-bench")]
-mod bench;
-#[cfg(feature = "pd-bench")]
-pub use bench::{CANDIDATES, unaligned_enabled};

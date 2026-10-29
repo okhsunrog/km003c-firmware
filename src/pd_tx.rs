@@ -1,4 +1,4 @@
-//! HW2.1 CC1/CC2 timer/DMA transmitter, shared by the fixed GetCaps bench probe and
+//! HW2.1 CC1/CC2 timer/DMA transmitter for
 //! the usbpd sink stack. The stack supplies Requests, GoodCRC and reset frames;
 //! this module handles waveform completion, cancellation and CC termination.
 //! PB6 / AW9523 P0_3 follow native 2.0.7 sink modes 1 / 2.
@@ -6,11 +6,10 @@ use crate::pd_capture::{Input, read8, read16, stop_events, write16};
 use core::{
     cell::UnsafeCell,
     future::poll_fn,
-    sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering, fence},
+    sync::atomic::{AtomicU8, AtomicU32, Ordering, fence},
     task::Poll,
 };
-#[cfg(not(feature = "rpc"))]
-use km003c_drivers::pd::Sop;
+
 use km003c_drivers::pd::tx::{self, Frame, Periods};
 
 const TIMER: usize = 0x40015400;
@@ -109,9 +108,8 @@ impl Drop for ActiveTx {
         }
     }
 }
-static USED: AtomicBool = AtomicBool::new(false);
+
 static START_CYCLES: AtomicU32 = AtomicU32::new(0);
-#[cfg(feature = "pd-sink")]
 pub fn start_cycles() -> u32 {
     START_CYCLES.load(Ordering::Acquire)
 }
@@ -131,7 +129,6 @@ fn w(a: usize, v: u32) {
 pub fn attached() -> bool {
     LEASE.load(Ordering::Acquire) != 0
 }
-#[cfg(feature = "pd-sink")]
 pub fn extend_lease(seconds: u16) {
     cortex_m::interrupt::free(|_| {
         if attached() {
@@ -190,7 +187,6 @@ pub async fn attach(selected: Input) -> Result<(), &'static str> {
             .map_err(|_| "CC2 Rd update failed")?;
     }
     cortex_m::interrupt::free(|_| {
-        USED.store(false, Ordering::Release);
         arm_lease(5000);
         // Native 0x40b12(1) drives PB6 high; mode 2 uses expander P0_3 low.
         // Set PB6's latch before its direction and keep it low on CC2.
@@ -208,7 +204,6 @@ pub async fn attach(selected: Input) -> Result<(), &'static str> {
 /// A physical disconnect/flip must be stable across several ADC scans. TX's
 /// selected pin never changes in flight; the owner drops the stack and releases
 /// outputs before restarting with the new orientation and fresh protocol state.
-#[cfg(feature = "pd-sink")]
 pub async fn disconnected() {
     let selected = input().number();
     let mut invalid = 0;
@@ -245,7 +240,7 @@ fn outputs_off() {
     write16(p.pa, 0x8000); // Restore ADC/CMP analog input, digital output off.
     write16(0x40053bfc, 0xa500);
 }
-/// Safe from timeout, cancellation, fault/reset or CDC disconnect, even before RX init.
+/// Safe from timeout, cancellation, fault/reset or USB disconnect, even before RX init.
 /// DMA is stopped before any later buffer reuse; no stack memory is involved.
 pub fn release() {
     cortex_m::interrupt::free(|_| {
@@ -293,7 +288,7 @@ fn on_interrupt_locked(kind: u8) -> bool {
             outputs_off();
             STATE.store(if quiet { 3 } else { 4 }, Ordering::Release);
             if quiet {
-                // No executor/CDC scheduling gap before the source's GoodCRC.
+                // No executor scheduling gap before the source's GoodCRC.
                 crate::pd_buffered::resume_after_tx();
             } else {
                 release();
@@ -309,32 +304,6 @@ fn on_interrupt_locked(kind: u8) -> bool {
         _ => (),
     }
     true
-}
-
-/// One fixed PD3.0 sink/UFP MessageID=0 control frame per five-second lease.
-/// This asks for capabilities; it cannot select a voltage or enter EPR.
-#[cfg(not(feature = "rpc"))]
-pub async fn get_caps(rx: &mut crate::pd_buffered::Buffered) -> Result<usize, &'static str> {
-    bounded_measurements()?;
-    let s = crate::lines::fresh().ok_or("line ADC stale")?;
-    if !attached() || s.cc_input() != Some(input().number()) {
-        return Err("selected CC sink lease required");
-    }
-    // PC14/15 are oscillator pads. Never override an active XTAL32 source.
-    if read8(0x40054420) & 1 == 0 {
-        return Err("XTAL32 still active");
-    }
-    if USED.swap(true, Ordering::AcqRel) {
-        return Err("one probe per lease");
-    }
-    transmit(
-        rx,
-        Frame::Packet {
-            sop: Sop::Sop,
-            wire: &[0x87, 0x00],
-        },
-    )
-    .await
 }
 
 /// Shared hardware engine; the sink stack owns message framing/IDs/GoodCRC.

@@ -229,7 +229,8 @@ native DFU on its 90-second deadline. Stock 1.9.9 was restored and verified by
 full 453828-byte readback; loader bytes `[0x4,0x4000)` still matched the original.
 
 [Source, hardware log and acceptance evidence](../../hardware/display-buttons)
-are maintained with the firmware. The two-second Exit return path was subsequently verified on hardware; the lightning button's CC electrical behavior
+are maintained with the firmware. The two-second Exit return path was
+subsequently verified on hardware; the lightning button's CC electrical behavior
 remains a separate investigation.
 
 ## INA229 acceptance against stock 2.0.7 (2026-10-28)
@@ -321,7 +322,8 @@ negotiation capture. Stock 2.0.7 was restored by full 456896-byte readback after
 the test; loader preservation is checked separately.
 
 [Reference traffic, raw intervals and acceptance](../../hardware/pd-cdc)
-and [CDC command protocol](../cdc-telemetry.md)
+and [CDC command
+protocol](https://github.com/okhsunrog/km003c-firmware/blob/e840ec3/docs/cdc-telemetry.md)
 are maintained with the custom firmware.
 
 ## Accelerometer and automatic display rotation (2026-10-28)
@@ -375,7 +377,8 @@ The measured handler/rearm portion was at most 725 cycles, about 3.78 µs at
 192 MHz; pre-entry IRQ latency is not included in that figure.
 
 During a 25-second host-backpressure test with no IN reads for its first
-10 seconds, DMA completed 24 bursts with zero overruns or reported post-SOP errors; only 12
+10 seconds, DMA completed 24 bursts with zero overruns or reported post-SOP
+errors; only 12
 PD records reached the host and the output-drop counter increased by 96 records.
 These are different layers of loss. Finite buffers do not guarantee losslessness
 under arbitrary traffic or interrupt starvation.

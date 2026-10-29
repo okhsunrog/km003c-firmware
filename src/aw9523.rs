@@ -31,7 +31,6 @@ pub type SharedBus =
     embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex, I2c3>;
 #[derive(Clone, Copy)]
 pub struct Aw9523 {
-    #[cfg(feature = "orientation")]
     bus: &'static SharedBus,
     registers: &'static embassy_sync::mutex::Mutex<BusMutex, Device>,
 }
@@ -63,16 +62,8 @@ impl Aw9523 {
         static DEVICE: static_cell::StaticCell<embassy_sync::mutex::Mutex<BusMutex, Device>> =
             static_cell::StaticCell::new();
         let registers = DEVICE.init(embassy_sync::mutex::Mutex::new(Device::new(bus)));
-        (
-            Self {
-                #[cfg(feature = "orientation")]
-                bus,
-                registers,
-            },
-            routes,
-        )
+        (Self { bus, registers }, routes)
     }
-    #[cfg(feature = "orientation")]
     pub fn sensor_bus(&self) -> Device {
         Device::new(self.bus)
     }
@@ -112,7 +103,6 @@ impl Aw9523 {
         Self::write_reg(&mut bus, 0x22, level).await?;
         Self::write_reg(&mut bus, 0x23, level / 2).await
     }
-    #[cfg(feature = "pd-tx-test")]
     pub async fn cc2_rd(&self, enabled: bool) -> Result<(), crate::cc_frontend::Error> {
         use crate::cc_frontend::Error as E;
         const OUTPUT0: u8 = 2;

@@ -1,29 +1,15 @@
-//! Opt-in, single-burst passive PD capture. CDC commands start acquisition.
-//!
-//! Register settings follow native 1.9.9 init (device address 0x102c0), checked
-//! against DDL 3.3.0 and an offline Unicorn write trace. HW2.1 captured a
-//! CRC-valid PD on PA0/CC1 and PA1/CC2. This receiver never drives CC itself;
-//! the separate opt-in pd-tx-test owner temporarily borrows its stopped timer.
-use core::{
-    future::poll_fn,
-    sync::atomic::{AtomicU32, Ordering},
-    task::Poll,
-};
-use embassy_futures::select::{Either, select};
+//! PD receiver using comparator events, TimerA and DMA. PA0/PA1 select CC1/CC2.
+//! The receiver never drives CC; the transmitter borrows the stopped timer and
+//! restores analog input mode before capture resumes.
 use embassy_hc32::{
     dma::{self, Channel, Unit},
     intc::{Line, Route},
     pac::interrupt,
 };
-use embassy_sync::waitqueue::AtomicWaker;
-use embassy_time::{Duration, with_timeout};
 
 const TMRA: usize = 0x40015400;
 const CMP: usize = 0x4004a000;
 const DCU: usize = 0x40052000;
-const WAITING: u32 = u32::MAX;
-static END: AtomicU32 = AtomicU32::new(WAITING);
-static WAKER: AtomicWaker = AtomicWaker::new();
 pub(crate) fn read8(address: usize) -> u8 {
     unsafe { (address as *const u8).read_volatile() }
 }
@@ -61,10 +47,6 @@ impl Input {
 pub enum Error {
     Dma(dma::Error),
     Routing(embassy_hc32::intc::IrqError),
-    InvalidBuffer,
-    Timeout,
-    BufferFull,
-    CountMismatch { events: usize, transferred: usize },
 }
 pub(crate) fn stop_events() {
     // Disable edge events and the physical VCOUT port, retain internal comparator
@@ -73,82 +55,32 @@ pub(crate) fn stop_events() {
     write16(TMRA + 0x80, read16(TMRA + 0x80) & !1);
     write8(TMRA + 0x81, read8(TMRA + 0x81) & !0x50);
 }
-struct StopEvents;
-impl Drop for StopEvents {
-    fn drop(&mut self) {
-        stop_events();
-    }
-}
-
 #[interrupt]
 fn INT008() {
-    #[cfg(feature = "pd-tx-test")]
-    if crate::pd_tx::on_interrupt(0) {
-        return;
-    }
-    #[cfg(feature = "cdc-telemetry")]
-    if crate::pd_buffered::enabled() {
+    if !crate::pd_tx::on_interrupt(0) {
         crate::pd_buffered::on_interrupt(0);
-        return;
-    }
-    if read8(TMRA + 0x81) & 0x40 != 0 {
-        stop_events();
-        END.store(read32(DCU + 8) & 0xffff, Ordering::Release);
-        WAKER.wake();
     }
 }
-#[cfg(feature = "pd-tx-test")]
 #[interrupt]
 fn INT016() {
     crate::pd_tx::on_interrupt(1);
 }
 #[interrupt]
 fn INT017() {
-    #[cfg(feature = "cdc-telemetry")]
-    if crate::pd_buffered::enabled() {
-        crate::pd_buffered::on_interrupt(1);
-        return;
-    }
-    dma::on_interrupt(Unit::Dma1);
+    crate::pd_buffered::on_interrupt(1);
 }
 #[interrupt]
 fn INT018() {
-    #[cfg(feature = "pd-tx-test")]
-    if crate::pd_tx::on_interrupt(2) {
-        return;
-    }
-    #[cfg(feature = "cdc-telemetry")]
-    if crate::pd_buffered::enabled() {
+    if !crate::pd_tx::on_interrupt(2) {
         crate::pd_buffered::on_interrupt(2);
-        return;
     }
-    dma::on_interrupt(Unit::Dma1);
 }
 
 pub struct Receiver {
-    channel: Channel,
-    _routes: [Route; if cfg!(feature = "pd-tx-test") { 4 } else { 3 }],
+    _channel: Channel,
+    _routes: [Route; 4],
 }
 impl Receiver {
-    /// Passive snapshot after capture cancellation; no register reads clear
-    /// flags here. Field order is documented in the CDC protocol notes.
-    pub fn diagnostics(&self) -> [u32; 12] {
-        [
-            u32::from(read16(CMP)),
-            u32::from(read16(CMP + 2)),
-            u32::from(read16(CMP + 4)),
-            read32(TMRA + 0x80),
-            u32::from(read16(TMRA)),
-            u32::from(read16(TMRA + 0x48)),
-            read32(DCU + 8),
-            read32(0x400530e8),
-            read32(0x4001084c),
-            read32(0x40010850),
-            read32(0x40053010),
-            read32(0x40053014),
-        ]
-    }
-
     /// Switch only the internal comparator mux between captures. Event/output
     /// drivers stay disabled; this does not change termination or any GPIO.
     pub fn select_input(&mut self, input: Input) {
@@ -160,34 +92,9 @@ impl Receiver {
         write16(CMP + 2, 0x4004 | positive);
     }
 
-    /// Feed a captured burst into the independent decoder. Errors are emitted
-    /// alongside valid packets so callers can measure loss/noise rather than
-    /// silently accepting a damaged trace. A quiet gap always resets state.
-    pub async fn receive(
-        &mut self,
-        buffer: &mut [u16],
-        decoder: &mut km003c_drivers::pd::Decoder,
-        timeout: Duration,
-        mut event: impl FnMut(Result<km003c_drivers::pd::Event, km003c_drivers::pd::Error>),
-    ) -> Result<usize, Error> {
-        decoder.reset();
-        let count = self.capture(buffer, timeout).await?;
-        for &ticks in &buffer[..count] {
-            match decoder.push_interval(ticks) {
-                Ok(Some(packet)) => event(Ok(packet)),
-                Ok(None) => (),
-                Err(error) => event(Err(error)),
-            }
-        }
-        if let Err(error) = decoder.finish() {
-            event(Err(error));
-        }
-        Ok(count)
-    }
-
     /// # Safety
     /// Own TMRA2, CMP1/DAC1, DCU1, **all DMA1 channels**, corresponding AOS
-    /// trigger selectors and IRQ8/17/18 (also IRQ16 with pd-tx-test). Configure the independently verified
+    /// trigger selectors and IRQ8/16/17/18. Configure the
     /// analog input pad before calling. No task/IRQ may alter those resources.
     /// Keep all CC transmit/termination GPIO outputs disabled separately, except
     /// when the exclusive board TX owner pauses RX and performs its handoff.
@@ -204,7 +111,6 @@ impl Receiver {
         let routes = unsafe {
             [
                 Route::new(0x103, Line::new(8).unwrap(), 5).map_err(Error::Routing)?,
-                #[cfg(feature = "pd-tx-test")]
                 Route::new(Unit::Dma1.complete_event(1).0, Line::new(16).unwrap(), 5)
                     .map_err(Error::Routing)?,
                 Route::new(Unit::Dma1.complete_event(2).0, Line::new(17).unwrap(), 5)
@@ -247,70 +153,9 @@ impl Receiver {
         // CMPOE is internal comparison output; OUTEN would drive VCOUT externally.
         write16(CMP, 0xc005);
         Ok(Self {
-            channel,
+            _channel: channel,
             _routes: routes,
         })
-    }
-
-    /// Capture one burst, ending on timer overflow after a quiet interval.
-    /// There is a blind interval before the caller rearms; this is not a
-    /// lossless analyzer. Buffer-full and DMA/event count mismatch are errors.
-    /// Cancellation drops the HAL transfer, waiting for DMA bus quiescence
-    /// before releasing the borrowed destination. A wedged DMA may stall there.
-    pub async fn capture(&mut self, buffer: &mut [u16], timeout: Duration) -> Result<usize, Error> {
-        if buffer.is_empty() || buffer.len() > 860 {
-            return Err(Error::InvalidBuffer);
-        }
-        stop_events();
-        let capacity = buffer.len();
-        END.store(WAITING, Ordering::Release);
-        write32(DCU + 8, 0);
-        write16(TMRA, 0);
-        write16(TMRA + 4, 0x98); // Quiet-gap period from native receive setup
-        // The HAL owns DMA cancellation and memory fences. No custom raw DMA
-        // pointer is retained after the borrowed transfer is dropped.
-        let transfer = unsafe {
-            self.channel.read_u16(
-                (TMRA + 0x48) as *const u16,
-                buffer,
-                embassy_hc32::pac::events::EventSource(0x105),
-            )
-        }
-        .map_err(Error::Dma)?;
-        let guard = StopEvents;
-        // BCSTRH is the byte at +0x81, not a halfword at +0x82.
-        write8(TMRA + 0x81, 0x10); // Overflow IRQ, stale flags cleared
-        write16(CMP, read16(CMP) | 0x60); // Both edges, no CPU comparator IRQ
-        let end = poll_fn(|cx| {
-            WAKER.register(cx.waker());
-            match END.load(Ordering::Acquire) {
-                WAITING => Poll::Pending,
-                n => Poll::Ready(n as usize),
-            }
-        });
-        let result = select(transfer, with_timeout(timeout, end)).await;
-        drop(guard);
-        match result {
-            Either::First(Err(e)) => Err(Error::Dma(e)),
-            Either::First(Ok(())) => Err(Error::BufferFull),
-            Either::Second(Err(_)) => Err(Error::Timeout),
-            Either::Second(Ok(events)) => {
-                // A DCU event alone does not prove a DMA write succeeded. Check
-                // the settled transfer count before exposing buffer contents.
-                // DTCTL2 holds the programmed reload count; MONDTCTL2 is
-                // the live remaining count (DDL DMA_GetTransCount).
-                let remaining = (read32(0x400530e8) >> 16) as usize;
-                let transferred = capacity.saturating_sub(remaining);
-                if events != transferred || events > capacity {
-                    Err(Error::CountMismatch {
-                        events,
-                        transferred,
-                    })
-                } else {
-                    Ok(events)
-                }
-            }
-        }
     }
 }
 impl Drop for Receiver {
@@ -319,5 +164,14 @@ impl Drop for Receiver {
         write16(CMP, 0);
         // Preserve DAC1 state: caller owns it, other comparator users may share
         // its reference after explicitly transferring ownership elsewhere.
+    }
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Dma(e) => write!(f, "DMA: {e:?}"),
+            Self::Routing(e) => write!(f, "IRQ routing: {e:?}"),
+        }
     }
 }

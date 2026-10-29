@@ -21,7 +21,6 @@ impl Display {
     /// erase command. Call before panel init while this owner has the entire
     /// shared QSPI bus. Leave flash in standard SPI, which also works after a
     /// real power-on; later panel transactions save/restore that controller mode.
-    #[cfg(feature = "measurement")]
     pub fn factory_settings(&mut self) -> (u16, [u8; 96]) {
         Self::idle();
         unsafe {
@@ -42,7 +41,6 @@ impl Display {
         self.flash_read(&[0x03, 0x3f, 0xf1, 0x00], &mut block);
         (u16::from_be_bytes(id), block)
     }
-    #[cfg(feature = "measurement")]
     fn flash_read(&mut self, command: &[u8], response: &mut [u8]) {
         Self::idle();
         unsafe {
@@ -87,7 +85,6 @@ impl Display {
             rotation: km003c_drivers::rotation::Rotation::default(),
         }
     }
-    #[cfg(feature = "orientation")]
     pub fn set_rotation(&mut self, turns: u8) {
         self.rotation = km003c_drivers::rotation::Rotation::new(turns);
     }

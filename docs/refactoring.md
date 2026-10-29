@@ -35,9 +35,10 @@ constraints rather than replacing working register sequences blindly.
 ## USB control, telemetry and logging
 
 The [postcard-rpc image](rpc.md) now replaces CDC ASCII/NDJSON for status,
-measurements, active PD control/events and logging. Passive and benchmark
-commands still require the legacy image. Define remaining request/response and
-topic types in the shared `no_std`
+measurements, active PD control/events and logging. Passive monitoring also uses
+RPC. Bring-up benchmarks and the legacy transport
+have been removed. Define request/response and topic types in the shared
+`no_std`
 interface crate used by firmware and a Rust host client. Use endpoints for
 status, configuration, explicit PD control and loader entry; topics carry
 measurements, captured PD traffic and diagnostics. Preserve explicit active-PD
