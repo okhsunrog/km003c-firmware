@@ -75,8 +75,9 @@ can coexist with a later CRC-valid packet and is not itself a lost-packet count.
 Output drops are reported separately by the ADC telemetry `dropped` field.
 
 `pd_packet.end_us` is IRQ-observed packet-end uptime from the current Embassy
-clock, whose resolution here is 1 ms despite the field's microsecond units. It
-is not a precise wire timestamp. `max_handler_cycles` measures work after handler
+clock, whose resolution is now about 30.5 µs despite the field's microsecond
+units. It is not a precise wire timestamp. `max_handler_cycles` measures work
+after handler
 entry with DWT, not interrupt latency before entry. At HCLK 192 MHz, divide cycles
 by 192 for microseconds. Interval capture itself runs at PCLK1/8 = 12 MHz.
 

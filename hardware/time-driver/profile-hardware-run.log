@@ -1,0 +1,313 @@
+FirmwareUpdateProgress { stage: Connecting, bytes_written: 0, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: CheckingStatus, bytes_written: 0, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Erasing, bytes_written: 0, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 0, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 4080, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 8160, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 12240, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 16320, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 20400, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 24480, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 28560, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 32640, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 36720, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 40800, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 44880, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 48960, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 53040, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 57120, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 61200, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 65280, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 69360, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 73440, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 77520, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 81600, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 85680, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 89760, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 93840, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 97920, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 102000, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 106080, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 110160, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 114240, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 118320, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 122400, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 126480, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 130560, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 134640, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 138720, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 142800, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 146880, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 150960, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 155040, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 159120, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 163200, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 167280, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 171360, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 175440, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 179520, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 183600, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 187680, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 191760, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 195840, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 199920, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 204000, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 208080, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 212160, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 216240, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 220320, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 224400, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 228480, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 232560, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 236640, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 240720, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 244800, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 248880, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 252960, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 257040, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 261120, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 265200, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 269280, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 273360, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 277440, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 281520, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 285600, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 289680, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 293760, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 297840, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 301920, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 306000, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 310080, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 314160, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 318240, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Writing, bytes_written: 321840, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Verifying, bytes_written: 321840, total_bytes: 321840 }
+FirmwareUpdateProgress { stage: Complete, bytes_written: 321840, total_bytes: 321840 }
+Custom image readback and unchanged bootloader verified; starting Rust
+driver log: ,
+    0x3a,
+    0x34,
+    0x30,
+    0x31,
+    0x34,
+    0x2c,
+    0x22,
+    0x64,
+    0x6d,
+    0x5f,
+    0x75,
+    0x76,
+    0x22,
+    0x3a,
+    0x31,
+    0x36,
+    0x30,
+    0x35,
+    0x39,
+    0x2c,
+    0x22,
+    0x76,
+    0x64,
+    0x64,
+    0x5f,
+    0x75,
+    0x76,
+    0x22,
+    0x3a,
+    0x33,
+    0x32,
+    0x38,
+    0x38,
+    0x39,
+    0x38,
+    0x31,
+    0x2c,
+    0x22,
+    0x72,
+    0x61,
+    0x77,
+    0x22,
+    0x3a,
+    0x5b,
+    0x33,
+    0x39,
+    0x36,
+    0x32,
+    0x2c,
+    0x20,
+    0x30,
+    0x2c,
+    0x20,
+    0x35,
+    0x2c,
+    0x20,
+]
+write ep=EndpointAddress(130): diepctl 00898040 ftxfsts 000000d0
+write ep=EndpointAddress(130) wait for prev: ready
+write ep=EndpointAddress(130) wait for fifo: ready
+write done ep=EndpointAddress(130)
+in ep=2 irq val=00002091
+write ep=EndpointAddress(130) data=[
+    0x32,
+    0x30,
+    0x2c,
+    0x20,
+    0x31,
+    0x33,
+    0x34,
+    0x35,
+    0x5d,
+    0x2c,
+    0x22,
+    0x63,
+    0x63,
+    0x5f,
+    0x69,
+    0x6e,
+    0x70,
+    0x75,
+    0x74,
+    0x22,
+    0x3a,
+    0x30,
+    0x7d,
+    0xa,
+]
+write ep=EndpointAddress(130): diepctl 00888040 ftxfsts 000000d0
+write ep=EndpointAddress(130) wait for prev: ready
+write ep=EndpointAddress(130) wait for fifo: ready
+write done ep=EndpointAddress(130)
+in ep=2 irq val=00002091
+write ep=EndpointAddress(130) data=[
+    0x7b,
+    0x22,
+    0x74,
+    0x79,
+    0x70,
+    0x65,
+    0x22,
+    0x3a,
+    0x22,
+    0x61,
+    0x63,
+    0x63,
+    0x65,
+    0x6c,
+    0x22,
+    0x2c,
+    0x22,
+    0x69,
+    0x64,
+    0x22,
+    0x3a,
+    0x31,
+    0x37,
+    0x2c,
+    0x22,
+    0x73,
+    0x6f,
+    0x75,
+    0x72,
+    0x63,
+    0x65,
+    0x22,
+    0x3a,
+    0x38,
+    0x30,
+    0x2c,
+    0x22,
+    0x78,
+    0x79,
+    0x7a,
+    0x5f,
+    0x6d,
+    0x67,
+    0x22,
+    0x3a,
+    0x5b,
+    0x36,
+    0x38,
+    0x2c,
+    0x20,
+    0x34,
+    0x31,
+    0x2c,
+    0x20,
+    0x2d,
+    0x39,
+    0x33,
+    0x30,
+    0x5d,
+    0x2c,
+    0x22,
+    0x72,
+    0x6f,
+    0x74,
+]
+write ep=EndpointAddress(130): diepctl 00898040 ftxfsts 000000d0
+write ep=EndpointAddress(130) wait for prev: ready
+write ep=EndpointAddress(130) wait for fifo: ready
+write done ep=EndpointAddress(130)
+in ep=2 irq val=00002091
+=== status 01a500b1
+OUT_DATA_RX ep=1 len=11
+=== status 01a70001
+OUT_DATA_DONE ep=1
+write ep=EndpointAddress(130) data=[
+    0x61,
+    0x74,
+    0x69,
+    0x6f,
+    0x6e,
+    0x22,
+    0x3a,
+    0x33,
+    0x2c,
+    0x22,
+    0x63,
+    0x6f,
+    0x75,
+    0x6e,
+    0x74,
+    0x22,
+    0x3a,
+    0x32,
+    0x32,
+    0x38,
+    0x32,
+    0x2c,
+    0x22,
+    0x65,
+    0x72,
+    0x72,
+    0x6f,
+    0x72,
+    0x22,
+    0x3a,
+    0x66,
+    0x61,
+    0x6c,
+    0x73,
+    0x65,
+    0x7d,
+    0xa,
+]
+write ep=EndpointAddress(130): diepctl 00888040 ftxfsts 000000d0
+write ep=EndpointAddress(130) wait for prev: ready
+write ep=EndpointAddress(130) wait for fifo: ready
+write done ep=EndpointAddress(130)
+read ep=EndpointAddress(1) done len=11
+=== status 01a40071
+OUT_DATA_RX ep=1 len=7
+=== status 01a60001
+OUT_DATA_DONE ep=1
+read start len=64
+read ep=EndpointAddress(1) done len=7
+
+ADC retained [41444331, 00000003, 00005449, 00002291, 00000170, 0000fdb0, 00001062, 0000001e, 000003b2, 00000001, 00000008, 00000007, 00000e90, 00000001, 00000000, 00018fab, ffffffd9, 00000036, 00000000, 00000070, 00003e80, 00008515, 00000001, 003ff100]
+ADC init [494e4931, 00000003, 00000170, 0000fdb0, 00001062, 0000001e, 00000170, 0000fdb0, 00001062, 0000001e, 0000005f, 00000012, 00000001, 00000001, 00000000, 00000000]
+UI counters [00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+bus trace [00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+diagnostic [00000001, 40002440, 04808428, c01c3814, 00080000, 000003b3, 00000000, 0042c706, fffdfeb7, 4f54330a, 000500a0, 13702f81, 80008000, 00000001, 60080040, 00008000, 00000080, 00000000, 00000001, 00000008, 00000000, 00030007, 00000040, 00100040]
+Rust result: [52555354, 00000001, 00004000, 600d0002, 00000003, 00000000, 00001e50, 00000000, 00000000, 00000000, 00000000, 00000000]
+PASS: Rust main completed and reset into the original bootloader

@@ -27,6 +27,7 @@ image and `tools/usb_echo.py` remain available for USB transport regression test
 | `pd getcaps` | With `pd-tx-test` only: one fixed Get_Source_Capabilities per lease |
 | `pd sink 5/9/12/15/20` | With `pd-sink`: negotiate the selected fixed voltage on CC1 for up to 20 seconds |
 | `pd bench` | With `pd-bench`: capture Source Capabilities at 5 V, detach, compare completed-burst decoders using DWT |
+| `time bench` | With `pd-bench`: test TimerA alarms, start-phase quantization, wraps and IRQ costs without CC attachment |
 | `loader` | Request native DFU and reset |
 
 PD commands require `pd-capture`. On the tested HW2.1, inputs 1/2 correspond to
@@ -71,7 +72,8 @@ about 12.75 µs after the last edge at the configured 12 MHz timer clock.
 - `pd_input`: selected comparator input, including automatic switches.
 
 Legacy `pd_packet.ms` is processing uptime, **not a hardware wire timestamp**.
-Buffered builds use `end_us`, IRQ-observed end uptime with 1 ms resolution.
+Buffered builds use `end_us`, IRQ-observed end uptime with approximately
+30.5 µs clock resolution.
 The raw
 first capture has no preceding edge and is excluded from decoding. Measured
 interval groups were 15/19/23 and 35/39/43 ticks; half-bit 20 and tolerance 5
@@ -110,6 +112,11 @@ sink session without passive/probe options. `pd_sink` records distinguish
 decode phases documented in [PD transmission](pd-transmit.md). ADC records
 provide the independent measured voltage. These commands change charger output;
 the hardware acceptance tests used an unloaded charger, with Pixel disconnected.
+
+`uv run tools/bench.py clock --time-bench --seconds 10` records `time_bench`,
+`time_bench_samples`, `time_irq_cost` and `time_bench_done`. It measures timeouts
+against the physical TimerA1 counter and verifies SysTick remains disabled.
+The extra DWT handler profiler is compiled only with `pd-bench`.
 
 `uv run tools/bench.py decoder --pd-bench --seconds 25` compares decoder
 implementations with the optional `pd-bench` image. It is exclusive with other

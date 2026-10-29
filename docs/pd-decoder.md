@@ -87,4 +87,4 @@ uv run tools/validate_pd_scanners.py \
 
 [Hardware results](../hardware/pd-optimization/README.md) preserve all five runs,
 raw cycles, fixtures, both image identities, 5/9/12/15/20 V acceptance and recovery.
-The Embassy clock backend and protocol policies are unchanged by this work.
+The measurements above precede the subsequent [time backend change](time-driver.md).

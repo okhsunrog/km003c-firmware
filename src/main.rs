@@ -3,6 +3,7 @@
 
 use core::{panic::PanicInfo, ptr::write_volatile};
 use cortex_m_rt::{entry, exception};
+use embassy_hc32::pac::interrupt;
 
 mod aw9523;
 mod display;
@@ -27,6 +28,8 @@ mod pd_tx;
 mod retention_log;
 #[cfg(feature = "cdc-telemetry")]
 mod telemetry;
+#[cfg(feature = "pd-bench")]
+mod time_stats;
 mod ui;
 mod usb;
 const MARKER: *mut u32 = 0x200f_0fc0 as *mut u32;
@@ -76,6 +79,11 @@ core::arch::global_asm!(
     "ldr r0, =0xe000e010",
     "movs r1, #0",
     "str r1, [r0]",
+    // Disabling SysTick does not clear an already pending exception. Clear
+    // inherited SysTick/PendSV before enabling interrupts in the application.
+    "ldr r0, =0xe000ed04",
+    "ldr r1, =0x0a000000",
+    "str r1, [r0]",
     "ldr r0, =0xe000e180",
     "ldr r2, =0xe000e280",
     "movs r1, #0",
@@ -115,7 +123,6 @@ fn main() -> ! {
         write_volatile(MARKER.add(1), 1);
         write_volatile(MARKER.add(2), 0x0000_4000);
     }
-    let cp = cortex_m::Peripherals::take().unwrap();
     use embassy_hc32::clocks::{self, Config, Divider, Dividers, Mpll};
     unsafe {
         write_volatile(0x40050804 as *mut u32, 0x77);
@@ -146,7 +153,20 @@ fn main() -> ! {
     log::info!("Clock readback: {clocks:?}");
     #[cfg(feature = "pd-sink")]
     pd_sink::init();
-    embassy_hc32::time_driver::init(cp.SYST, hclk).unwrap();
+    // No timer pin/output is enabled. PCLK1 is fixed after startup.
+    unsafe {
+        // Application startup exclusively owns all routes. A loader jump can
+        // leave selectors mapped even though pre-init disabled their NVICs.
+        embassy_hc32::intc::clear_routes();
+        embassy_hc32::time_driver::init(
+            _device.tmra1,
+            clocks.pclk[1],
+            embassy_hc32::intc::Line::new(80).unwrap(),
+            embassy_hc32::intc::Line::new(81).unwrap(),
+            5,
+        )
+        .unwrap();
+    }
     static EXECUTOR: static_cell::StaticCell<embassy_executor::Executor> =
         static_cell::StaticCell::new();
     unsafe {
@@ -156,6 +176,8 @@ fn main() -> ! {
         #[cfg(feature = "measurement")]
         measurement::init();
         s.spawn(usb_task().unwrap());
+        #[cfg(feature = "pd-tx-test")]
+        s.spawn(pd_tx::lease_task().unwrap());
         s.spawn(ui::task().unwrap());
         #[cfg(feature = "measurement")]
         {
@@ -172,56 +194,21 @@ fn main() -> ! {
     })
 }
 
-#[exception]
-fn SysTick() {
-    embassy_hc32::time_driver::systick_tick();
-    #[cfg(feature = "pd-tx-test")]
-    pd_tx::tick();
-    static TICKS: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
-    let deadline = if cfg!(feature = "manual-ui-test") {
-        600_000
-    } else {
-        90_000
-    };
-    if TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed) >= deadline {
-        unsafe {
-            for (i, address) in [
-                0x400c0008usize,
-                0x400c000c,
-                0x400c0014,
-                0x400c0018,
-                0x400c0038,
-                0x400c0800,
-                0x400c0804,
-                0x400c0808,
-                0x40048004,
-                0x400c0040,
-                0x40054024,
-                0x40054100,
-                0x400c0b00,
-                0x400c0b08,
-                0x400c0b10,
-                0x400c0900,
-                0x400c0908,
-                0x400c0910,
-                0x400c0810,
-                0x400c0814,
-                0x400c0818,
-                0x400c081c,
-                0x400c0024,
-                0x400c0028,
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                write_volatile(
-                    (0x200f0e00 as *mut u32).add(i),
-                    core::ptr::read_volatile(address as *const u32),
-                );
-            }
-        }
-        return_to_loader(0x600d0002);
-    }
+// TimerA1 is reserved by the HAL time driver; both sources use the same
+// wrap-safe clock/queue handler. SysTick stays disabled after pre-init.
+#[interrupt]
+fn INT080() {
+    #[cfg(feature = "pd-bench")]
+    time_stats::irq(0);
+    #[cfg(not(feature = "pd-bench"))]
+    embassy_hc32::time_driver::on_interrupt();
+}
+#[interrupt]
+fn INT081() {
+    #[cfg(feature = "pd-bench")]
+    time_stats::irq(1);
+    #[cfg(not(feature = "pd-bench"))]
+    embassy_hc32::time_driver::on_interrupt();
 }
 
 #[embassy_executor::task]

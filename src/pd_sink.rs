@@ -151,25 +151,13 @@ impl Driver for Phy<'_> {
 struct Clock;
 impl usbpd::timers::Timer for Clock {
     async fn after_millis(milliseconds: u64) {
-        if milliseconds == 1 {
-            // CRCReceive must last a full millisecond. The HAL's 1 kHz clock
-            // rounds now down, so its ordinary 1-tick wait may expire early.
-            // Only this short deadline polls cycles; RX/DMA IRQs still preempt
-            // it and the surrounding select can receive GoodCRC immediately.
-            let start = unsafe { (0xe0001004 as *const u32).read_volatile() };
-            core::future::poll_fn(|cx| {
-                let now = unsafe { (0xe0001004 as *const u32).read_volatile() };
-                if now.wrapping_sub(start) >= 192_000 {
-                    core::task::Poll::Ready(())
-                } else {
-                    cx.waker().wake_by_ref();
-                    core::task::Poll::Pending
-                }
-            })
-            .await;
-            return;
-        }
-        embassy_time::Timer::after_millis(milliseconds).await;
+        // now() is rounded down to 1/32768 s. One extra tick prevents an
+        // elapsed wait shorter than the requested milliseconds at any phase.
+        embassy_time::Timer::after(
+            embassy_time::Duration::from_millis(milliseconds)
+                + embassy_time::Duration::from_ticks(1),
+        )
+        .await;
     }
 }
 struct Policy {

@@ -10,10 +10,9 @@ the four D+/D−/CC1/CC2 voltages.
 Button diagnostics are retained in logs/RAM instead of taking screen space.
 Concurrent byte-for-byte USB echo passed for 1, 23, 64, 7, 64, 17, 128, 256 and
 512 bytes, including the new meter image.
-The image returns to native DFU about 90 seconds after startup. Holding Exit
-for two seconds also requests DFU; this path is now verified on hardware.
-For manual visual checks, `--features measurement,manual-ui-test` extends only
-the fallback deadline to ten minutes so the operator has time to respond.
+Holding Exit for two seconds or sending the CDC `loader` command requests native
+DFU. Normal operation has no automatic reset deadline. The `manual-ui-test`
+feature is retained as an empty compatibility flag for earlier scripts.
 
 The initial device tests restored the original 1.9.9 application. Subsequent
 ADC tests used stock 2.0.7 and restored that same version with full application
@@ -96,8 +95,8 @@ GoodCRC, retries and fixed-PDO negotiation. Unloaded 5/9/12/15/20 V contracts
 passed on CC1, including about 19.98 V measured by INA229. Use
 `uv run tools/bench.py trigger --sink 20 --seconds 10` explicitly; it ends the
 session afterward. [Hardware evidence](hardware/pd-sink/README.md) records the
-image, captures, timings and limits. CC2 TX, PPS/EPR policy and a higher-resolution
-Embassy time backend remain open. PD stays off by default, and working custom
+image, captures, timings and limits. CC2 TX, PPS/EPR policy and low-power
+timekeeping remain open. PD stays off by default, and working custom
 images are kept installed between tests.
 
 The sink's [measured decoder optimization](docs/pd-decoder.md) compares 18 Rust,
@@ -191,8 +190,10 @@ and attempts to restore it when finished. No serial kernel driver is required.
 The payloads and eight-packet queue are intended for these bounded bring-up
 checks, not unrestricted buffering or sustained-throughput acceptance.
 
-SysTick advances the HAL Embassy time driver and the independent reset deadline.
-The deadline cannot recover a hang that permanently masks interrupts.
+The [HAL time driver](docs/time-driver.md) owns TimerA1 and compare/overflow IRQs.
+Embassy uses 32,768 logical ticks/s; hardware counts at 375 kHz. SysTick is
+unused. TX deadlines and CC leases are ordinary asynchronous Embassy timers;
+TX cancellation releases active DMA/output through a drop guard.
 
 ## Retention diagnostics
 

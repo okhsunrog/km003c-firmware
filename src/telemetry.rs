@@ -27,6 +27,8 @@ enum PdCommand {
     Sink(u16),
     #[cfg(feature = "pd-bench")]
     Bench,
+    #[cfg(feature = "pd-bench")]
+    ClockBench,
 }
 #[cfg(feature = "pd-capture")]
 static PD: Channel<CriticalSectionRawMutex, PdCommand, 4> = Channel::new();
@@ -49,6 +51,12 @@ fn reply(message: &str) {
 }
 fn command(text: &str) {
     match text.trim() {
+        #[cfg(feature = "pd-bench")]
+        "time bench" => {
+            if PD.try_send(PdCommand::ClockBench).is_err() {
+                reply("PD busy");
+            }
+        }
         #[cfg(feature = "pd-bench")]
         "pd bench" => {
             if PD.try_send(PdCommand::Bench).is_err() {
@@ -556,6 +564,13 @@ pub async fn captures() {
         let Some(command) = command else {
             continue;
         };
+        #[cfg(feature = "pd-bench")]
+        if let PdCommand::ClockBench = command {
+            if let Err(e) = crate::pd_bench::clock().await {
+                reply(e);
+            }
+            continue;
+        }
         if let PdCommand::Stop = command {
             #[cfg(feature = "pd-tx-test")]
             crate::pd_tx::release();
@@ -601,6 +616,8 @@ pub async fn captures() {
             PdCommand::Sink(_) => 1,
             #[cfg(feature = "pd-bench")]
             PdCommand::Bench => 1,
+            #[cfg(feature = "pd-bench")]
+            PdCommand::ClockBench => unreachable!(),
         };
         automatic = requested == 0;
         input = if automatic {
@@ -626,6 +643,8 @@ pub async fn captures() {
         }
         let r = receiver.as_mut().unwrap();
         match command {
+            #[cfg(feature = "pd-bench")]
+            PdCommand::ClockBench => unreachable!(),
             #[cfg(feature = "pd-bench")]
             PdCommand::Bench => {
                 streaming = false;

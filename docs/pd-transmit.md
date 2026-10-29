@@ -30,12 +30,15 @@ Request, EPR or reset commands. This probe cannot select a supply voltage.
 TX uses a dedicated static buffer, DMA1 CH1 and TimerA2 PA0 AF4. The DMA IRQ
 holds the final interval; the following overflow IRQ disables OUTEN/PC14,
 restores PA0 analog mode and rearms RX immediately. ADC1's watchdog stays off.
-IRQ transitions and SysTick cleanup share a critical section. A five-millisecond
-TX deadline and the five-second CC lease are enforced independently of the
-capture executor and CDC. `pd stop`, actual USB disconnect and fault/reset also
-release the controls. Dropping a host interface alone need not cause a USB
-disconnect, so the independent lease is essential. DMA storage stays valid
-even on failure; another transfer cannot reuse it without proving CH1 stopped.
+IRQ transitions and timeout cleanup share a critical section. TX uses a
+five-millisecond `embassy_time::with_timeout`; a drop guard also releases an
+unfinished waveform on cancellation. A separate async lease task releases CC
+after five seconds (30 seconds for an active sink session), using a generation
+check so an older deadline cannot detach a renewed lease. These timers require
+executor progress. `pd stop`, actual USB disconnect and fault/reset also release
+the controls. Dropping a host interface alone need not cause a USB disconnect.
+DMA storage stays valid even on failure; another transfer cannot reuse it
+without proving CH1 stopped.
 
 The hardware test observed CC1 changing from about 3.18 V to 1.63 V and VBUS
 rising to about 4.99 V. The charger returned CRC-valid SOP GoodCRC `a1 01`,
@@ -43,7 +46,7 @@ MessageID 0, in each TX run. PB6 low restored the detached state and VBUS near
 zero. Source Capabilities retry because this probe does not acknowledge them or
 request a contract. ACK reception establishes a working transmitter with this
 charger; it does not measure analog impedance, BMC timing compliance or
-microsecond turnaround. Captured `end_us` still has 1 ms resolution.
+microsecond turnaround. Captured `end_us` now has approximately 30.5 µs clock resolution.
 
 [Captures, image identity, counters and recovery evidence](../hardware/pd-sink/README.md)
 include a host-read stall across lease expiry. Forced CDC backpressure can drop
@@ -243,21 +246,20 @@ on USB enumeration. `pd stop`, Exit and `loader` retain recovery behavior.
 
 ## Timing and profiling
 
-The 1 kHz HAL time driver cannot supply the crate's one-millisecond CRCReceive
-timeout directly: its rounded-down `now()` can make a one-tick wait end almost
-immediately. Only that short deadline uses a rescheduled DWT poll lasting a full
-192,000 CPU cycles. Other timers remain async Embassy timers. This bounded poll
-can occupy the decoder executor for up to one millisecond; a hardware-alarm time
-backend is the intended replacement. A 32,768 Hz time base is sufficient for
-these protocol timers; changing the feature alone does not fix the driver, and
-does not require 32,768 interrupts per second.
+The [TimerA1 HAL backend](time-driver.md) supplies 32,768 logical ticks/s using
+free-running counter/compare alarms. The former DWT-based one-millisecond
+CRCReceive poll is removed. The stack timer adapter awaits an ordinary Embassy
+Timer with `Duration::from_millis(ms) + Duration::from_ticks(1)`. The extra tick
+covers the rounded-down start timestamp; the hardware test measured the padded
+1 ms wait at 1.019..1.054 ms across varied start phases. Other Embassy tasks can
+run while the deadline is pending. SysTick and automatic DFU reset are removed.
 
 `DEMCR.TRCENA` and `DWT_CTRL.CYCCNTENA` enable profiling. `end_cycles` is recorded
 when the RX IRQ ends a frame; `rx_to_tx_cycles` stops immediately before starting
 the TX timer. Use wrapping subtraction and divide cycles by 192 for nominal µs.
 The RX mark follows the approximately 12.75 µs quiet gap, so this is not itself
-an external EOP timestamp. Captures preserve both cycle counts and the unchanged
-one-millisecond-resolution `end_us` field.
+an external EOP timestamp. Captures preserve cycle counts and `end_us`, whose
+clock now has approximately 30.5 µs resolution despite its microsecond units.
 
 The completed-burst decoder keeps symbol state in local variables; the separate
 streaming decoder remains available. It validates CRC before delivery and is
@@ -286,8 +288,9 @@ The accepted path uses scalar Thumb-2, unrolled BMC/4b5b and confirmed alternati
 preamble skipping. Five runs of 128 measurements each reduced Source
 Capabilities from 73.36 to 45.17 µs (complete decode, CRC included, profiling
 disabled). [New evidence](../hardware/pd-optimization/README.md) also records
-renewed 5/9/12/15/20 V contracts and preserved recovery; the timer backend has
-not changed.
+renewed 5/9/12/15/20 V contracts and preserved recovery for that image. The
+subsequent [time-driver acceptance](../hardware/time-driver/README.md) records
+renewed contracts after replacing the clock backend.
 
 Sources: [published driver contract](https://docs.rs/usbpd-traits/2.0.0/usbpd_traits/trait.Driver.html),
 [published sink policy](https://docs.rs/usbpd/2.0.0/usbpd/sink/device_policy_manager/trait.DevicePolicyManager.html),

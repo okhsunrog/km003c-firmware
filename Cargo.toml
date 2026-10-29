@@ -21,8 +21,7 @@ pd-bench = ["pd-sink"]
 orientation = []
 # NDJSON measurement/PD diagnostics instead of the byte echo protocol.
 cdc-telemetry = ["measurement"]
-# Manual visual checks need time for the operator to receive the prompt.
-# Exit/panic still request DFU immediately; this only extends the fallback.
+# Compatibility with earlier bring-up scripts; automatic DFU reset is removed.
 manual-ui-test = []
 
 [dependencies]
@@ -30,9 +29,9 @@ cortex-m = "0.7.10"
 cortex-m-rt = "0.7.7"
 embassy-executor = { version = "0.10.0", features = ["platform-cortex-m", "executor-thread", "executor-interrupt"] }
 embassy-futures = "0.1.2"
-embassy-hc32 = { git = "https://github.com/okhsunrog/hc32f460-embassy-rs", rev = "08a2603185d5acd05fda156e9cef468d47526be1", version = "0.1.0", default-features = false, features = ["rt", "critical-section-single-core", "time-driver"] }
+embassy-hc32 = { git = "https://github.com/okhsunrog/hc32f460-embassy-rs", rev = "23e09a053ddf5284d28c06407b9172adf9c48a34", version = "0.1.0", default-features = false, features = ["rt", "critical-section-single-core", "time-driver-tmra"] }
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02", version = "0.8.0" }
-embassy-time = "0.5.1"
+embassy-time = { version = "0.5.1", features = ["tick-hz-32_768"] }
 embassy-usb = { version = "0.6.0", features = ["log"] }
 embassy-usb-synopsys-otg = { version = "0.4.0", features = ["log"], git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
 embedded-graphics = "0.8.2"

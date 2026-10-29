@@ -1,0 +1,474 @@
+{
+  "board": "KM003C HW2.1",
+  "hclk_hz": 192000000,
+  "pclk1_hz": 96000000,
+  "counter_hz": 375000,
+  "tick_hz": 32768,
+  "overflow_seconds": 0.17476266666666668,
+  "overflow_hz": 5.7220458984375,
+  "hal_revision": "23e09a053ddf5284d28c06407b9172adf9c48a34",
+  "hal_ci": "https://github.com/okhsunrog/hc32f460-embassy-rs/actions/runs/40792443540",
+  "waits": [
+    {
+      "ms": 1,
+      "padded": false,
+      "samples": 64,
+      "min_us": 989.3333333333334,
+      "p50_us": 1005.3333333333334,
+      "max_us": 1024.0
+    },
+    {
+      "ms": 1,
+      "padded": true,
+      "samples": 64,
+      "min_us": 1018.6666666666666,
+      "p50_us": 1034.6666666666667,
+      "max_us": 1050.6666666666667
+    },
+    {
+      "ms": 5,
+      "padded": true,
+      "samples": 64,
+      "min_us": 5016.0,
+      "p50_us": 5032.0,
+      "max_us": 5048.0
+    },
+    {
+      "ms": 20,
+      "padded": true,
+      "samples": 64,
+      "min_us": 20032.0,
+      "p50_us": 20048.0,
+      "max_us": 20064.0
+    }
+  ],
+  "irq_cost": [
+    {
+      "type": "time_irq_cost",
+      "source": 0,
+      "calls": 6,
+      "cycles": 7023,
+      "max_cycles": 1242,
+      "window_ticks": 36045,
+      "mean_body_us": 6.096354166666667,
+      "body_cpu_percent": 0.0033252656401720074
+    },
+    {
+      "type": "time_irq_cost",
+      "source": 1,
+      "calls": 167,
+      "cycles": 211677,
+      "max_cycles": 1441,
+      "window_ticks": 36045,
+      "mean_body_us": 6.601702844311377,
+      "body_cpu_percent": 0.1002252961575808
+    }
+  ],
+  "voltages": [
+    {
+      "capture": "5v",
+      "target_v": 5,
+      "median_uv": 4986908,
+      "tx": [
+        {
+          "type": "pd_tx",
+          "wire_hex": "8102",
+          "rx_to_tx_cycles": 20423,
+          "decode_cycles": 9587,
+          "decode_phase_cycles": [
+            1955,
+            5553,
+            529,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "82100a280013",
+          "rx_to_tx_cycles": 277831,
+          "decode_cycles": 9587,
+          "decode_phase_cycles": [
+            1955,
+            5553,
+            529,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8104",
+          "rx_to_tx_cycles": 14559,
+          "decode_cycles": 4726,
+          "decode_phase_cycles": [
+            1955,
+            1313,
+            145,
+            248
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8106",
+          "rx_to_tx_cycles": 14594,
+          "decode_cycles": 4798,
+          "decode_phase_cycles": [
+            1955,
+            1256,
+            145,
+            248
+          ]
+        }
+      ]
+    },
+    {
+      "capture": "9v",
+      "target_v": 9,
+      "median_uv": 8990423,
+      "tx": [
+        {
+          "type": "pd_tx",
+          "wire_hex": "8102",
+          "rx_to_tx_cycles": 20422,
+          "decode_cycles": 9587,
+          "decode_phase_cycles": [
+            1955,
+            5553,
+            529,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "82100a280023",
+          "rx_to_tx_cycles": 308018,
+          "decode_cycles": 9587,
+          "decode_phase_cycles": [
+            1955,
+            5553,
+            529,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8104",
+          "rx_to_tx_cycles": 14547,
+          "decode_cycles": 4726,
+          "decode_phase_cycles": [
+            1955,
+            1313,
+            145,
+            248
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8106",
+          "rx_to_tx_cycles": 14587,
+          "decode_cycles": 4798,
+          "decode_phase_cycles": [
+            1955,
+            1256,
+            145,
+            248
+          ]
+        }
+      ]
+    },
+    {
+      "capture": "12v",
+      "target_v": 12,
+      "median_uv": 11984954,
+      "tx": [
+        {
+          "type": "pd_tx",
+          "wire_hex": "8102",
+          "rx_to_tx_cycles": 20411,
+          "decode_cycles": 9587,
+          "decode_phase_cycles": [
+            1955,
+            5553,
+            529,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "82100a280033",
+          "rx_to_tx_cycles": 335227,
+          "decode_cycles": 9587,
+          "decode_phase_cycles": [
+            1955,
+            5553,
+            529,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8104",
+          "rx_to_tx_cycles": 14559,
+          "decode_cycles": 4726,
+          "decode_phase_cycles": [
+            1955,
+            1313,
+            145,
+            248
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8106",
+          "rx_to_tx_cycles": 14594,
+          "decode_cycles": 4798,
+          "decode_phase_cycles": [
+            1955,
+            1256,
+            145,
+            248
+          ]
+        }
+      ]
+    },
+    {
+      "capture": "15v",
+      "target_v": 15,
+      "median_uv": 14981829,
+      "tx": [
+        {
+          "type": "pd_tx",
+          "wire_hex": "8102",
+          "rx_to_tx_cycles": 20374,
+          "decode_cycles": 9587,
+          "decode_phase_cycles": [
+            1955,
+            5553,
+            529,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "82100a280043",
+          "rx_to_tx_cycles": 363842,
+          "decode_cycles": 9587,
+          "decode_phase_cycles": [
+            1955,
+            5553,
+            529,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8104",
+          "rx_to_tx_cycles": 14551,
+          "decode_cycles": 4726,
+          "decode_phase_cycles": [
+            1955,
+            1313,
+            145,
+            248
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8106",
+          "rx_to_tx_cycles": 14606,
+          "decode_cycles": 4798,
+          "decode_phase_cycles": [
+            1955,
+            1256,
+            145,
+            248
+          ]
+        }
+      ]
+    },
+    {
+      "capture": "20v",
+      "target_v": 20,
+      "median_uv": 19978900,
+      "tx": [
+        {
+          "type": "pd_tx",
+          "wire_hex": "8102",
+          "rx_to_tx_cycles": 20422,
+          "decode_cycles": 9587,
+          "decode_phase_cycles": [
+            1955,
+            5553,
+            529,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "82100a280053",
+          "rx_to_tx_cycles": 392502,
+          "decode_cycles": 9587,
+          "decode_phase_cycles": [
+            1955,
+            5553,
+            529,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8104",
+          "rx_to_tx_cycles": 14559,
+          "decode_cycles": 4726,
+          "decode_phase_cycles": [
+            1955,
+            1313,
+            145,
+            248
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8106",
+          "rx_to_tx_cycles": 14590,
+          "decode_cycles": 4798,
+          "decode_phase_cycles": [
+            1955,
+            1256,
+            145,
+            248
+          ]
+        }
+      ]
+    },
+    {
+      "capture": "final-20v",
+      "target_v": 20,
+      "median_uv": 19980462,
+      "tx": [
+        {
+          "type": "pd_tx",
+          "wire_hex": "8100",
+          "rx_to_tx_cycles": 20537,
+          "decode_cycles": 9667,
+          "decode_phase_cycles": [
+            1955,
+            5614,
+            548,
+            356
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "82100a280053",
+          "rx_to_tx_cycles": 390449,
+          "decode_cycles": 9667,
+          "decode_phase_cycles": [
+            1955,
+            5614,
+            548,
+            356
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8102",
+          "rx_to_tx_cycles": 14561,
+          "decode_cycles": 4762,
+          "decode_phase_cycles": [
+            1955,
+            1322,
+            145,
+            257
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8104",
+          "rx_to_tx_cycles": 14617,
+          "decode_cycles": 4825,
+          "decode_phase_cycles": [
+            1955,
+            1255,
+            145,
+            257
+          ]
+        }
+      ]
+    },
+    {
+      "capture": "startup-20v",
+      "target_v": 20,
+      "median_uv": 19980267,
+      "tx": [
+        {
+          "type": "pd_tx",
+          "wire_hex": "8100",
+          "rx_to_tx_cycles": 20443,
+          "decode_cycles": 9600,
+          "decode_phase_cycles": [
+            1955,
+            5614,
+            530,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "82100a280053",
+          "rx_to_tx_cycles": 392931,
+          "decode_cycles": 9600,
+          "decode_phase_cycles": [
+            1955,
+            5614,
+            530,
+            344
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8102",
+          "rx_to_tx_cycles": 14575,
+          "decode_cycles": 4712,
+          "decode_phase_cycles": [
+            1955,
+            1322,
+            145,
+            248
+          ]
+        },
+        {
+          "type": "pd_tx",
+          "wire_hex": "8104",
+          "rx_to_tx_cycles": 14622,
+          "decode_cycles": 4785,
+          "decode_phase_cycles": [
+            1955,
+            1255,
+            145,
+            248
+          ]
+        }
+      ]
+    }
+  ],
+  "long_wait": {
+    "type": "time_bench_done",
+    "elapsed_ticks": 36045,
+    "irq_delta": 173,
+    "wrap_delta": 6,
+    "systick_enable": 0
+  },
+  "lease": {
+    "observed_active_ms": 4757,
+    "final_cc1_uv": 3181382,
+    "final_uptime_ms": 117582
+  },
+  "final_image_uptime_before_manual_loader_ms": 236718,
+  "hashes": {
+    "tested-image.bin": "c0bfb4b84e227c21e9f32450aee09a3514b63f288dce63cc29c6e4d0a5154774",
+    "profile-tested-image.bin": "633c4ca051ea88b18ceda3f6d9150a04817d2d878c7eb00972806d77f2c35973",
+    "first-tested-image.bin": "4a6827ed4e34f5c26034e9fb0db8d1ea697bc27740ce1acd3ff35af240900231"
+  },
+  "final_rebuild_matches_readback_except_loader_metadata": true,
+  "startup_pending_systick_pendsv_cleared": true
+}

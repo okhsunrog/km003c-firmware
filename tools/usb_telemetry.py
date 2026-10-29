@@ -71,6 +71,7 @@ def connect(libusb: str | None, wait: float):
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--libusb")
+    parser.add_argument("--time-bench", action="store_true")
     parser.add_argument(
         "--pd-bench",
         action="store_true",
@@ -116,6 +117,10 @@ def main() -> None:
     args = parser.parse_args()
     if args.sink and (args.cc1_probe or args.pd or args.pause_read):
         parser.error("--sink is exclusive with capture/probe/backpressure options")
+    if args.time_bench and (
+        args.pd_bench or args.sink or args.cc1_probe or args.pd or args.pause_read
+    ):
+        parser.error("--time-bench is exclusive with PD and backpressure options")
     if args.pd_bench and (args.sink or args.cc1_probe or args.pd or args.pause_read):
         parser.error("--pd-bench is exclusive with sink/capture/backpressure options")
     if args.pd_continuous and not args.pd:
@@ -142,6 +147,8 @@ def main() -> None:
             device.write(0x01, f"pd sink {args.sink}\n".encode(), timeout=2000)
         if args.pd_bench:
             device.write(0x01, b"pd bench\n", timeout=2000)
+        if args.time_bench:
+            device.write(0x01, b"time bench\n", timeout=2000)
         next_pd = time.monotonic() + 16
         # Active controls stay explicit and fixed, with no arbitrary wire frame.
         probe_start = time.monotonic() + 0.5
@@ -201,7 +208,9 @@ def main() -> None:
                 output.write(json.dumps(record, separators=(",", ":")) + "\n")
                 output.flush()
                 counts[kind] = counts.get(kind, 0) + 1
-                if args.pd_bench and kind == "pd_bench_done":
+                if (args.pd_bench and kind == "pd_bench_done") or (
+                    args.time_bench and kind == "time_bench_done"
+                ):
                     deadline = time.monotonic()
                 if (
                     args.cc1_probe == "attach"
@@ -230,11 +239,11 @@ def main() -> None:
         device.write(
             0x01,
             b"pd stop\nstream off\n"
-            if args.pd_continuous or args.sink or args.pd_bench
+            if args.pd_continuous or args.sink or args.pd_bench or args.time_bench
             else b"stream off\n",
             timeout=2000,
         )
-        if args.pd_continuous or args.sink or args.pd_bench:
+        if args.pd_continuous or args.sink or args.pd_bench or args.time_bench:
             # Read the final cumulative counters and acknowledgement. There may
             # still be queued records after the last timed read, so retain the
             # partial line rather than discarding it at the session boundary.
@@ -276,6 +285,8 @@ def main() -> None:
         raise RuntimeError("No ADC records received")
     if invalid:
         raise RuntimeError("Malformed CDC records received")
+    if args.time_bench and not counts.get("time_bench_done"):
+        raise RuntimeError("Time benchmark did not complete")
     if args.pd_bench and not counts.get("pd_bench_done"):
         raise RuntimeError("PD benchmark did not complete")
     if args.pd and not (

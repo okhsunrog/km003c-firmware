@@ -196,3 +196,61 @@ pub async fn run(rx: &mut Buffered) -> Result<(), &'static str> {
     writeln!(line, "{{\"type\":\"pd_bench_done\",\"cases\":{vectors}}}").unwrap();
     send(line).await
 }
+
+/// Alarm acceptance without CC attachment. Read the physical counter directly
+/// as a reference: DWT is reserved for active CPU work and is not a sleep clock.
+pub async fn clock() -> Result<(), &'static str> {
+    use embassy_time::{Duration, Instant, Timer};
+    let (_, hz, _, _) = embassy_hc32::time_driver::diagnostics();
+    // Exercise now() across a physical wrap while the calling executor is
+    // running. The handler is lower priority; now() must account pending wrap.
+    let begin = cycles();
+    let mut previous = Instant::now();
+    while cycles().wrapping_sub(begin) < 38_400_000 {
+        let next = Instant::now();
+        if next < previous || (next - previous).as_ticks() > 100 {
+            return Err("clock discontinuity across hardware wrap");
+        }
+        previous = next;
+    }
+    for (ms, padded) in [(1, false), (1, true), (5, true), (20, true)] {
+        let mut samples = [0u16; 64];
+        for (i, value) in samples.iter_mut().enumerate() {
+            // Sweep start phase through one logical tick, exposing rounding
+            // rather than measuring only phase-locked back-to-back wakeups.
+            cortex_m::asm::delay(((i * 193) % 6000) as u32);
+            let start = unsafe { (0x40015000 as *const u16).read_volatile() };
+            Timer::after(Duration::from_millis(ms) + Duration::from_ticks(u64::from(padded))).await;
+            *value = unsafe { (0x40015000 as *const u16).read_volatile() }.wrapping_sub(start);
+        }
+        let mut sorted = samples;
+        sorted.sort_unstable();
+        let mut line = Line::new();
+        writeln!(line,"{{\"type\":\"time_bench\",\"ms\":{ms},\"padded\":{padded},\"tick_hz\":{},\"counter_hz\":{hz},\"min_counts\":{},\"p50_counts\":{},\"max_counts\":{}}}",embassy_time::TICK_HZ,sorted[0],sorted[32],sorted[63]).unwrap();
+        send(line).await?;
+        for (i, chunk) in samples.chunks(32).enumerate() {
+            let mut line = Line::new();
+            writeln!(line,"{{\"type\":\"time_bench_samples\",\"ms\":{ms},\"padded\":{padded},\"offset\":{},\"counts\":{chunk:?}}}",i*32).unwrap();
+            send(line).await?;
+        }
+        if padded && u64::from(sorted[0]) * 1_000_000 < u64::from(hz) * ms * 1000 {
+            return Err("timer expired early");
+        }
+    }
+    let before = embassy_hc32::time_driver::diagnostics();
+    let profile_before = crate::time_stats::snapshot();
+    let start = Instant::now();
+    Timer::after_millis(1100).await;
+    let elapsed = Instant::now() - start;
+    let after = embassy_hc32::time_driver::diagnostics();
+    let profile_after = crate::time_stats::snapshot();
+    for (i, (a, b)) in profile_before.into_iter().zip(profile_after).enumerate() {
+        let mut line = Line::new();
+        writeln!(line,"{{\"type\":\"time_irq_cost\",\"source\":{i},\"calls\":{},\"cycles\":{},\"max_cycles\":{},\"window_ticks\":{}}}",b[0].wrapping_sub(a[0]),b[1].wrapping_sub(a[1]),b[2],elapsed.as_ticks()).unwrap();
+        send(line).await?;
+    }
+    let systick = unsafe { (0xe000e010 as *const u32).read_volatile() } & 3;
+    let mut line = Line::new();
+    writeln!(line,"{{\"type\":\"time_bench_done\",\"elapsed_ticks\":{},\"irq_delta\":{},\"wrap_delta\":{},\"systick_enable\":{systick}}}",elapsed.as_ticks(),after.2.wrapping_sub(before.2),after.3.wrapping_sub(before.3)).unwrap();
+    send(line).await
+}

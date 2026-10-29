@@ -1,6 +1,7 @@
-//! Deliberately narrow HW2.1 CC1 bench probe, not a USB-PD sink policy.
-//! PB6 follows native 2.0.7 mode 1. Only Get_Source_Capabilities is exposed:
-//! no Request, EPR, arbitrary packets or automatic response is possible here.
+//! HW2.1 CC1 timer/DMA transmitter, shared by the fixed GetCaps bench probe and
+//! the usbpd sink stack. The stack supplies Requests, GoodCRC and reset frames;
+//! this module handles waveform completion, cancellation and CC termination.
+//! PB6 follows native 2.0.7 mode 1.
 use crate::pd_capture::{read8, read16, stop_events, write16};
 use core::{
     cell::UnsafeCell,
@@ -22,7 +23,55 @@ const PC15: usize = 0x40053cbc;
 // 0=idle, 1=DMA, 2=last interval, 3=wire done, 4=fault, 5=deadline.
 static STATE: AtomicU8 = AtomicU8::new(0);
 static LEASE: AtomicU32 = AtomicU32::new(0);
-static TX_TICKS: AtomicU32 = AtomicU32::new(0);
+static LEASE_VERSION: AtomicU32 = AtomicU32::new(0);
+static LEASE_CHANGED: embassy_sync::signal::Signal<
+    embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
+    Option<(embassy_time::Instant, u32)>,
+> = embassy_sync::signal::Signal::new();
+
+// Generation checks prevent expiry of an old lease from detaching a renewed
+// connection. Changes and expiry are serialized with the hardware handoff.
+fn arm_lease(ms: u64) {
+    let version = LEASE_VERSION.load(Ordering::Relaxed).wrapping_add(1).max(1);
+    LEASE_VERSION.store(version, Ordering::Relaxed);
+    LEASE.store(version, Ordering::Release);
+    LEASE_CHANGED.signal(Some((
+        embassy_time::Instant::now() + embassy_time::Duration::from_millis(ms),
+        version,
+    )));
+}
+#[embassy_executor::task]
+pub async fn lease_task() {
+    use embassy_futures::select::{Either, select};
+    let mut deadline = None;
+    loop {
+        deadline = if let Some((at, version)) = deadline {
+            match select(LEASE_CHANGED.wait(), embassy_time::Timer::at(at)).await {
+                Either::First(next) => next,
+                Either::Second(()) => {
+                    cortex_m::interrupt::free(|_| {
+                        if LEASE.load(Ordering::Acquire) == version {
+                            release();
+                        }
+                    });
+                    None
+                }
+            }
+        } else {
+            LEASE_CHANGED.wait().await
+        };
+    }
+}
+// Cancelling a transmit future also stops active DMA/output. Completed TX
+// keeps CC attached; only an unfinished waveform needs the release path.
+struct ActiveTx;
+impl Drop for ActiveTx {
+    fn drop(&mut self) {
+        if matches!(STATE.load(Ordering::Acquire), 1 | 2) {
+            release();
+        }
+    }
+}
 static USED: AtomicBool = AtomicBool::new(false);
 static START_CYCLES: AtomicU32 = AtomicU32::new(0);
 #[cfg(feature = "pd-sink")]
@@ -49,7 +98,7 @@ pub fn attached() -> bool {
 pub fn extend_lease() {
     cortex_m::interrupt::free(|_| {
         if attached() {
-            LEASE.store(30_000, Ordering::Release);
+            arm_lease(30_000);
         }
     });
 }
@@ -76,7 +125,7 @@ pub fn attach() -> Result<(), &'static str> {
     }
     cortex_m::interrupt::free(|_| {
         USED.store(false, Ordering::Release);
-        LEASE.store(5000, Ordering::Release);
+        arm_lease(5000);
         // PB6 push-pull, default drive, no pull-up: native 0x40b12(1).
         // Latch first, then enable. Do not touch AW9523 or the other CC line.
         write16(0x40053818, 1 << 6);
@@ -101,11 +150,12 @@ fn outputs_off() {
     write16(PA0, 0x8000); // Restore ADC/CMP analog input, digital output off.
     write16(0x40053bfc, 0xa500);
 }
-/// Safe from SysTick, fault/reset or CDC disconnect, including before RX init.
+/// Safe from timeout, cancellation, fault/reset or CDC disconnect, even before RX init.
 /// DMA is stopped before any later buffer reuse; no stack memory is involved.
 pub fn release() {
     cortex_m::interrupt::free(|_| {
         let leased = LEASE.swap(0, Ordering::AcqRel) != 0;
+        LEASE_CHANGED.signal(None);
         if matches!(STATE.load(Ordering::Acquire), 1 | 2) {
             stop_events();
             let _ = stop_tx_dma();
@@ -118,31 +168,9 @@ pub fn release() {
         }
     });
 }
-/// Independent 1 kHz deadline, not dependent on USB, UI or capture-task progress.
-pub fn tick() {
-    cortex_m::interrupt::free(|_| {
-        let lease = LEASE.load(Ordering::Relaxed);
-        if lease != 0 {
-            LEASE.store(lease - 1, Ordering::Relaxed);
-            if lease == 1 {
-                // release() must still see a lease to clear PB6.
-                LEASE.store(1, Ordering::Relaxed);
-                release();
-            }
-        }
-        let ticks = TX_TICKS.load(Ordering::Relaxed);
-        if ticks != 0 {
-            TX_TICKS.store(ticks - 1, Ordering::Relaxed);
-            if ticks == 1 && matches!(STATE.load(Ordering::Acquire), 1 | 2) {
-                release();
-            }
-        }
-    });
-}
-
 /// Timer/DMA IRQs own the DMA -> last-interval -> RX handoff.
 pub fn on_interrupt(kind: u8) -> bool {
-    // Serialize with the SysTick lease cleanup as well as other DMA IRQs.
+    // Serialize with the lease timeout cleanup as well as other DMA IRQs.
     // Otherwise expiry could interrupt the tail handoff and be overwritten by
     // its stale state transition. The body is bounded and never awaits.
     cortex_m::interrupt::free(|_| on_interrupt_locked(kind))
@@ -166,7 +194,6 @@ fn on_interrupt_locked(kind: u8) -> bool {
             stop_events();
             let quiet = stop_tx_dma();
             outputs_off();
-            TX_TICKS.store(0, Ordering::Release);
             STATE.store(if quiet { 3 } else { 4 }, Ordering::Release);
             if quiet {
                 // No executor/CDC scheduling gap before the source's GoodCRC.
@@ -245,6 +272,7 @@ pub async fn transmit(
         }
         embassy_time::Timer::after_millis(1).await;
     }
+    let _active = ActiveTx;
     let result = cortex_m::interrupt::free(|_| {
         if !attached() {
             return Err("lease expired");
@@ -274,7 +302,6 @@ pub async fn transmit(
         write16(TIMER + 4, unsafe { ptr.read() });
         write16(TIMER, 0);
         STATE.store(1, Ordering::Release);
-        TX_TICKS.store(5, Ordering::Release);
         fence(Ordering::SeqCst);
         w(DMA + 0x1c, r(DMA + 0x1c) | 2);
         START_CYCLES.store(r(0xe0001004), Ordering::Release);
@@ -282,15 +309,22 @@ pub async fn transmit(
         Ok(())
     });
     result?;
-    poll_fn(|cx| {
-        WAKER.register(cx.waker());
-        if matches!(STATE.load(Ordering::Acquire), 1 | 2) {
-            Poll::Pending
-        } else {
-            Poll::Ready(())
-        }
-    })
-    .await;
+    if embassy_time::with_timeout(
+        embassy_time::Duration::from_millis(5),
+        poll_fn(|cx| {
+            WAKER.register(cx.waker());
+            if matches!(STATE.load(Ordering::Acquire), 1 | 2) {
+                Poll::Pending
+            } else {
+                Poll::Ready(())
+            }
+        }),
+    )
+    .await
+    .is_err()
+    {
+        release();
+    }
     if STATE.load(Ordering::Acquire) == 3 {
         Ok(count)
     } else {
