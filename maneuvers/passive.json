@@ -1,0 +1,5 @@
+{
+  "name": "passive-auto-cc",
+  "duration_ms": 15000,
+  "steps": [{"at_ms": 0, "command": {"Monitor": {"input": null}}}]
+}

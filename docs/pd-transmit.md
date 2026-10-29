@@ -13,8 +13,8 @@ also negotiated 20 V. ADC selects the detached line; the stack is recreated
 after a cable flip. [CC2 acceptance](../hardware/cc2/README.md) preserves those
 measurements. PPS and EPR policy remain unimplemented.
 
-Use `bash tools/rpc.sh sink 20` for an explicit unloaded-charger session, or
-`bash tools/rpc.sh monitor auto` for passive reception. Acquisition and active
+Use `just cli sink 20` for an explicit unloaded-charger session, or
+`just cli monitor auto` for passive reception. Acquisition and active
 PD both use the RPC owner; passive reception never enables Rd or sends GoodCRC.
 [RPC documentation](rpc.md) describes commands, topics and scheduling.
 
@@ -194,8 +194,8 @@ The adapter uses these ownership boundaries:
   5 V when unavailable. It does not use the crate's highest-current default.
 
 ```sh
-cargo build --release --locked
-bash tools/rpc.sh sink 20
+just build-firmware
+just cli sink 20
 ```
 
 RPC accepts a `Sink` request with a fixed voltage and duration in seconds

@@ -3,6 +3,8 @@
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
+pub const PROTOCOL_VERSION: u16 = 2;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Schema)]
 pub struct Status {
     pub protocol_version: u16,
@@ -49,15 +51,21 @@ postcard_rpc::topics! {
 pub enum PdControl {
     Stop,
     /// Passive reception; None follows the active CC selected by ADC.
-    Monitor { input: Option<u8> },
-    Sink { volts: u16, seconds: u16 },
+    Monitor {
+        input: Option<u8>,
+    },
+    Sink {
+        volts: u16,
+        seconds: u16,
+    },
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Schema)]
 pub enum ControlError {
     Invalid,
     Busy,
 }
-pub type ControlResult = Result<(), ControlError>;
+/// Accepted command ID; terminal events carry this ID.
+pub type ControlResult = Result<u32, ControlError>;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Schema)]
 pub enum PdEvent {
     Stats {
@@ -79,6 +87,7 @@ pub enum PdEvent {
         phases: [u32; 4],
     },
     State {
+        command_id: u32,
         state: PdState,
         value: u32,
     },

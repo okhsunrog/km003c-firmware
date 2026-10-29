@@ -26,11 +26,11 @@ impl SpawnContext for Context {
     fn spawn_ctxt(&mut self) {}
 }
 fn pd_control(_: &mut Context, _: VarHeader, command: PdControl) -> ControlResult {
-    crate::rpc_pd::control(command)
+    crate::pd_service::control(command)
 }
 fn status(_: &mut Context, _: VarHeader, _: ()) -> Status {
     Status {
-        protocol_version: 1,
+        protocol_version: PROTOCOL_VERSION,
         uptime_ms: embassy_time::Instant::now().as_millis(),
         hclk_hz: 192_000_000,
     }
@@ -81,7 +81,7 @@ pub async fn run(driver: Driver<'static>, spawner: embassy_executor::Spawner) {
     let serve = async {
         loop {
             let _ = server.run().await;
-            let _ = crate::rpc_pd::control(PdControl::Stop);
+            let _ = crate::pd_service::control(PdControl::Stop);
             STREAM.store(false, Ordering::Relaxed);
             embassy_time::Timer::after_millis(100).await;
         }
@@ -100,7 +100,7 @@ pub async fn run(driver: Driver<'static>, spawner: embassy_executor::Spawner) {
         {
             let mut seq = 0i32;
             loop {
-                let event = crate::rpc_pd::EVENTS.receive().await;
+                let event = crate::pd_service::EVENTS.receive().await;
                 let _ = embassy_time::with_timeout(
                     embassy_time::Duration::from_millis(20),
                     sender.publish::<PdEvents>(postcard_rpc::header::VarSeq::Seq4(seq), &event),

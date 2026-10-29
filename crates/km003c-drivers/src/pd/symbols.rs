@@ -77,9 +77,8 @@ pub fn scan<const MODE: u8, const FILTER: bool>(
     let mut next = || -> Result<Option<u8>, u32> {
         if MODE != 0 {
             if pos + 1 < data.len() {
-                // read_unaligned keeps the portable implementation valid for a
-                // slice beginning at an odd halfword, as real captures do.
-                let pair = unsafe { data.as_ptr().add(pos).cast::<u32>().read_unaligned() };
+                // Pack halfwords explicitly: no alignment or host-endian assumption.
+                let pair = u32::from(data[pos]) | (u32::from(data[pos + 1]) << 16);
                 if short_pair(pair) {
                     pos += 2;
                     return Ok(Some(1));

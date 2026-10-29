@@ -1,0 +1,8 @@
+{
+  "backup_sha256": "4823c420b917a041faec3b90a1010bc1f60ae2fc383dc55841a664d9459d3f18",
+  "hw_version": "2.1",
+  "image_sha256": "370bde72c7d28715ae7ea46432616686de62076ce41360f8ca046b8ae86c67c7",
+  "loader_sha256": "17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf",
+  "model": "KM003C",
+  "selector": "PortPath { bus_id: \"003\", port_chain: [3] }"
+}

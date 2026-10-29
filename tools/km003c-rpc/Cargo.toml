@@ -1,9 +1,0 @@
-[package]
-name = "km003c-rpc"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-km003c-interface = { version = "0.1.0", path = "../../crates/km003c-interface" }
-postcard-rpc = { git = "https://github.com/jamesmunns/postcard-rpc", rev = "2469ebc6", version = "0.12.1", default-features = false, features = ["raw-nusb"] }
-tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "time"] }

@@ -14,12 +14,12 @@ mod orientation;
 mod pd_buffered;
 mod pd_capture;
 mod pd_fast;
+mod pd_service;
 mod pd_session;
 mod pd_sink;
 mod pd_tx;
 mod retention_log;
 mod rpc;
-mod rpc_pd;
 
 mod ui;
 mod usb;
@@ -183,7 +183,7 @@ fn main() -> ! {
             s.spawn(measurement::task().unwrap());
             s.spawn(lines::task().unwrap());
         }
-        rpc_pd::start();
+        pd_service::start();
     })
 }
 

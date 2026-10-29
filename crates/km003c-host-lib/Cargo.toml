@@ -1,0 +1,20 @@
+[package]
+name = "km003c-host-lib"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+aes = "0.9.3"
+anyhow = { workspace = true }
+crc32fast = "1.5.3"
+km003c-interface = { workspace = true }
+km003c-lib = { git = "https://github.com/okhsunrog/km003c-rs", rev = "efed50556d7376914bffd510e012aaa98081936f", version = "0.4.0" }
+postcard-rpc = { workspace = true, features = ["raw-nusb"] }
+serde = { workspace = true, features = ["std"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "signal"] }
+
+[lints]
+workspace = true

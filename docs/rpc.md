@@ -6,10 +6,10 @@ schemas in `crates/km003c-interface`. JSON/hex formatting is absent from this
 image. CDC, NDJSON and the Python USB clients have been removed.
 
 ```sh
-cargo build --release --locked
-bash tools/rpc.sh
-bash tools/rpc.sh sink 20
-bash tools/rpc.sh loader
+just build-firmware
+just cli capture
+just cli sink 20
+just cli loader
 ```
 
 The host client uses nusb and filters for `KM003C Rust RPC`; no serial driver is
@@ -49,7 +49,7 @@ lacks the Embassy 0.6 backend. This upstream revision supports driver 0.2 rather
 than pinning 0.2.0. Embassy USB, sync and time packages are patched to the already
 used `c2413d5` revision to keep their driver/mutex/timer types consistent.
 
-`bash tools/rpc.sh monitor auto` starts passive capture with ADC-based CC
+`just cli monitor auto` starts passive capture with ADC-based CC
 selection; `monitor 1` or `monitor 2` fixes the receiver input. Passive capture
 never enables Rd or sends GoodCRC. Stop ends capture through the same owner as
 active sessions. It uses the interrupt-rearmed buffers and validates CRC before

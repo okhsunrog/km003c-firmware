@@ -1,0 +1,43 @@
+[package]
+name = "km003c-firmware"
+version = "0.1.0"
+edition = "2024"
+
+# PD's software GoodCRC needs cross-crate optimization of the per-edge decoder.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[dependencies]
+cortex-m = "0.7.10"
+cortex-m-rt = "0.7.7"
+embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02", version = "0.6.0" }
+embassy-executor = { version = "0.10.0", features = ["platform-cortex-m", "executor-thread", "executor-interrupt"] }
+embassy-futures = "0.1.2"
+embassy-hc32 = { git = "https://github.com/okhsunrog/hc32f460-embassy-rs", rev = "23e09a053ddf5284d28c06407b9172adf9c48a34", version = "0.1.0", default-features = false, features = ["rt", "critical-section-single-core", "time-driver-tmra"] }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02", version = "0.8.0" }
+embassy-time = { version = "0.5.1", features = ["tick-hz-32_768"] }
+embassy-usb = { version = "0.6.0", features = ["log"] }
+embassy-usb-synopsys-otg = { version = "0.4.0", features = ["log"], git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embedded-graphics = "0.8.2"
+embedded-hal = "1.0.0"
+embedded-hal-async = "1.0.0"
+heapless = "0.9.3"
+km003c-drivers = { version = "0.1.0", path = "../crates/km003c-drivers" }
+km003c-interface = { version = "0.1.0", path = "../crates/km003c-interface" }
+log = { version = "0.4.34", default-features = false }
+postcard-rpc = { git = "https://github.com/jamesmunns/postcard-rpc", version = "0.12.1", default-features = false, features = ["embassy-usb-0_6-server"], rev = "2469ebc6" }
+static_cell = "2.1.1"
+uom = { version = "0.36.0", default-features = false, features = ["si", "u32"] }
+usbpd = { version = "2.0.0", features = ["log"] }
+usbpd-traits = { version = "2.0.0" }
+
+[patch.crates-io]
+embassy-executor-timer-queue = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-time-queue-utils = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-usb = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-net-driver-channel = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embassy-usb-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }

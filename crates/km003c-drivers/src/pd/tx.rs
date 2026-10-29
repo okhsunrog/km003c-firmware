@@ -216,7 +216,7 @@ mod tests {
                 let count = (status & 255) as usize;
                 let mut bytes = [0; 35];
                 if count != 0 {
-                    for (i, pair) in syms[..count - 1].chunks_exact(2).enumerate() {
+                    for (i, pair) in syms[..count - 1].as_chunks::<2>().0.iter().enumerate() {
                         bytes[i] = crate::pd::symbols::NIBBLES[pair[0] as usize]
                             | (crate::pd::symbols::NIBBLES[pair[1] as usize] << 4);
                     }

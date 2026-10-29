@@ -10,13 +10,13 @@ USB uses postcard-rpc over native bulk endpoints. There is one application build
 CDC, NDJSON, test images and the Python USB clients have been removed.
 
 ```sh
-cargo build --release --locked
-cargo clippy --release --locked -- -D warnings
-bash tools/rpc.sh
-bash tools/rpc.sh monitor auto
-bash tools/rpc.sh monitor 2
-bash tools/rpc.sh sink 20
-bash tools/rpc.sh loader
+just build-firmware
+just check
+just cli capture
+just cli monitor auto
+just cli monitor 2
+just cli sink 20
+just cli loader
 ```
 
 `monitor` receives passively without Rd, acknowledgements or voltage requests.
@@ -70,16 +70,30 @@ Historical acceptance records under `hardware/` and research documents preserve
 measurements and provenance. Commands/source paths inside those records describe
 the versions tested then; they are not the current build or host interface.
 
-## Packaging
+## Workspace and maintenance
 
-The target is `thumbv7em-none-eabihf`. Convert the linked image using
-`rust-objcopy -O binary`, then package it offline:
+The root workspace contains `km003c-interface`, `km003c-drivers`,
+`km003c-host-lib` and `km003c-host-cli`. The excluded `firmware/` crate has its
+own Thumb target and lockfile. `just check` verifies host and firmware separately.
+Install the Thumb target and cargo-binutils for firmware builds and packaging.
 
 ```sh
-uv run --project ../km003c-protocol-research python \
-  tools/package_custom_firmware.py INPUT.bin OUTPUT.mencrypt
+just package artifacts/km003c.mencrypt
+just cli backup artifacts/backup.bin
+just flash artifacts/km003c.mencrypt artifacts/backup.bin artifacts/flash-evidence
+just start
+just maneuver maneuvers/passive.json artifacts/passive.ndjson
 ```
 
-The helper reuses the sibling research implementation for authenticated framing.
-It never accesses a device. Temporary task artifacts belong under
-`~/tmp_zfs/codex_tmp/km003c-rust-bringup/`.
+`backup`, `verify`, `start` and `diagnostics` operate in native DFU. `flash`
+can enter DFU from the custom RPC application; an existing CRC-verified backup
+must match its live metadata. The evidence directory must be new. The writer
+checks the known HW2.1 loader before and after updating and compares the full
+application readback. A failed transfer leaves the device in DFU. It does not
+start the application automatically. The host reuses `km003c-lib` at a pinned
+Git revision for native-loader protocol and image validation.
+
+A maneuver is a validated timed sequence of PD commands. The host records the
+plan, command IDs, measurement and PD topics, and logs as NDJSON. Normal exit,
+Ctrl-C and errors request Stop and wait for the matching confirmed detach.
+Abrupt process termination relies on the firmware's finite session lease.

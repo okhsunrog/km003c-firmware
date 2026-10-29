@@ -1,8 +1,9 @@
 # Development
 
 - Use Rust edition 2024 and cargo add/remove for dependency changes.
-- Use uv run for Python. Reuse the sibling km003c protocol implementation;
-  do not duplicate authenticated framing or derive keys in new scripts.
+- Use uv run for Python. Use the pinned km003c-lib dependency for
+  authenticated protocol and loader operations; do not duplicate framing or
+  derive keys.
 - Use the user's `mistral_ocr` CLI for PDF extraction, selecting relevant pages.
 - Preserve the native bootloader and ICG. Applications begin at 0x4000.
 - Verify backup, recovery entry, image readback and unchanged bootloader before

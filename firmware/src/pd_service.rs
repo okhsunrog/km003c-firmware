@@ -3,12 +3,21 @@ use crate::{
     pd_buffered::{Buffered, Meta},
     pd_capture::{Input, Receiver},
 };
-use embassy_futures::select::select;
+use embassy_futures::select::{Either, select};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use km003c_interface::{ControlError, ControlResult, PdControl, PdEvent, PdState};
 pub static EVENTS: Channel<CriticalSectionRawMutex, PdEvent, 32> = Channel::new();
-static BUSY: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
-static COMMANDS: Channel<CriticalSectionRawMutex, PdControl, 4> = Channel::new();
+use core::sync::atomic::{AtomicU32, Ordering};
+// OWNER reserves a queued/running capture. Stop cannot clear a newer reservation.
+static OWNER: AtomicU32 = AtomicU32::new(0);
+static NEXT: AtomicU32 = AtomicU32::new(1);
+static CURRENT: AtomicU32 = AtomicU32::new(0);
+#[derive(Clone, Copy)]
+struct Request {
+    id: u32,
+    command: PdControl,
+}
+static COMMANDS: Channel<CriticalSectionRawMutex, Request, 4> = Channel::new();
 static EXECUTOR: embassy_executor::InterruptExecutor = embassy_executor::InterruptExecutor::new();
 use embassy_hc32::pac::interrupt;
 #[interrupt]
@@ -40,20 +49,33 @@ pub fn control(command: PdControl) -> ControlResult {
         }
         _ => {}
     }
-    if !matches!(command, PdControl::Stop) && BUSY.swap(true, core::sync::atomic::Ordering::AcqRel)
+    let id = NEXT.fetch_add(1, Ordering::Relaxed);
+    // Zero is reserved for events not belonging to a host command.
+    let id = if id == 0 {
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    } else {
+        id
+    };
+    if !matches!(command, PdControl::Stop)
+        && OWNER
+            .compare_exchange(0, id, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
     {
         return Err(ControlError::Busy);
     }
-    if COMMANDS.try_send(command).is_err() {
-        if !matches!(command, PdControl::Stop) {
-            BUSY.store(false, core::sync::atomic::Ordering::Release);
-        }
+    if COMMANDS.try_send(Request { id, command }).is_err() {
+        let _ = OWNER.compare_exchange(id, 0, Ordering::AcqRel, Ordering::Acquire);
         return Err(ControlError::Busy);
     }
-    Ok(())
+    Ok(id)
 }
+
 pub fn state(state: PdState, value: u32) {
-    let _ = EVENTS.try_send(PdEvent::State { state, value });
+    let _ = EVENTS.try_send(PdEvent::State {
+        command_id: CURRENT.load(Ordering::Acquire),
+        state,
+        value,
+    });
 }
 pub fn sink_status(s: &str, value: u32) {
     state(
@@ -120,16 +142,25 @@ async fn task() {
     };
     let mut rx = Buffered::new(receiver);
     loop {
-        let command = COMMANDS.receive().await;
+        let request = COMMANDS.receive().await;
+        CURRENT.store(request.id, Ordering::Release);
+        let command = request.command;
         match command {
             PdControl::Stop => {
-                if crate::pd_tx::release_and_wait().await.is_err() || !rx.stop() {
-                    state(PdState::Failed, 0);
-                }
+                let released = crate::pd_tx::release_and_wait().await;
+                let stopped = rx.stop();
+                state(
+                    if released.is_ok() && stopped {
+                        PdState::Detached
+                    } else {
+                        PdState::Failed
+                    },
+                    0,
+                );
                 continue;
             }
             PdControl::Sink { volts, seconds } => {
-                let _ = select(
+                let outcome = select(
                     COMMANDS.receive(),
                     embassy_time::with_timeout(
                         embassy_time::Duration::from_secs(u64::from(seconds)),
@@ -137,14 +168,21 @@ async fn task() {
                     ),
                 )
                 .await;
+                if let Either::First(stop) = outcome {
+                    CURRENT.store(stop.id, Ordering::Release);
+                }
             }
             PdControl::Monitor { input } => {
-                let _ = select(COMMANDS.receive(), monitor(&mut rx, input)).await;
+                if let Either::First(stop) =
+                    select(COMMANDS.receive(), monitor(&mut rx, input)).await
+                {
+                    CURRENT.store(stop.id, Ordering::Release);
+                }
             }
         }
         let released = crate::pd_tx::release_and_wait().await;
         let stopped = rx.stop();
-        BUSY.store(false, core::sync::atomic::Ordering::Release);
+        let _ = OWNER.compare_exchange(request.id, 0, Ordering::AcqRel, Ordering::Acquire);
         let s = rx.stats();
         let _ = EVENTS.try_send(PdEvent::Stats {
             counters: [

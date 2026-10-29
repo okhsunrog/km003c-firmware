@@ -1,1 +1,4 @@
-target/
+**/target/
+/artifacts/
+.ruff_cache/
+.rumdl_cache/
