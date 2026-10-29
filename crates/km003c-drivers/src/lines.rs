@@ -39,6 +39,18 @@ impl Sample {
             _ => None,
         }
     }
+    /// Board bench precondition: one detached charger Rp-like level and one
+    /// quiet CC input. This is deliberately narrower than a Type-C detector.
+    pub fn detached_cc_input(&self) -> Option<u8> {
+        match (
+            self.uv[0] > 2_500_000 && self.uv[1] < 400_000,
+            self.uv[1] > 2_500_000 && self.uv[0] < 400_000,
+        ) {
+            (true, false) => Some(1),
+            (false, true) => Some(2),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -79,5 +91,21 @@ mod tests {
                 .cc_input(),
             Some(2)
         );
+    }
+    #[test]
+    fn detached_orientation_requires_one_high_and_one_quiet_line() {
+        let mut s = Sample::from_raw([0, 0, 0, 0, 1343]).unwrap();
+        for (cc, expected) in [
+            ([3_180_000, 0], Some(1)),
+            ([0, 3_180_000], Some(2)),
+            ([0, 0], None),
+            ([3_180_000, 3_180_000], None),
+            ([1_650_000, 0], None),
+            ([3_180_000, 500_000], None),
+            ([2_500_000, 0], None),
+        ] {
+            s.uv[..2].copy_from_slice(&cc);
+            assert_eq!(s.detached_cc_input(), expected);
+        }
     }
 }

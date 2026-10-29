@@ -33,6 +33,8 @@ AW9523B at I2C `0x5b` provides panel reset through P1_1 and backlight dimming
 through registers `0x22` / `0x23`. Its hardware ID `0x23` was read successfully.
 I2C3 uses PC13 SDA (AF48), PH2 SCL (AF49), 100 kHz and interrupt-driven HAL I/O.
 Read-modify-write operations preserve unrelated expander outputs.
+The expander and accelerometer use async `I2cDevice` handles on one shared bus;
+an additional expander mutex protects complete register update sequences.
 
 | Button | MCU pin | Active level |
 | --- | --- | --- |
@@ -92,10 +94,14 @@ now enables CC1 sink attachment through PB6 and transmits a fixed
 Get_Source_Capabilities packet; a charger returned CRC-valid GoodCRC on hardware.
 The additional `pd-sink` feature runs the `usbpd` sink stack, including software
 GoodCRC, retries and fixed-PDO negotiation. Unloaded 5/9/12/15/20 V contracts
-passed on CC1, including about 19.98 V measured by INA229. Use
+passed on CC1, including about 19.98 V measured by INA229. CC2 has now also
+negotiated 20 V through PA1/channel 2/PC15, with P0_3 controlling its Rd path.
+Active sessions select CC from ADC and recreate the stack after a cable flip.
+Use
 `uv run tools/bench.py trigger --sink 20 --seconds 10` explicitly; it ends the
 session afterward. [Hardware evidence](hardware/pd-sink/README.md) records the
-image, captures, timings and limits. CC2 TX, PPS/EPR policy and low-power
+image, captures, timings and limits. [CC2 evidence](hardware/cc2/README.md)
+records the orientation test. PPS/EPR policy and low-power
 timekeeping remain open. PD stays off by default, and working custom
 images are kept installed between tests.
 
@@ -111,6 +117,10 @@ uses `embassy-usb` CDC ACM with **unmodified** `embassy-usb-synopsys-otg` from
 Embassy revision `c2413d5994bbd8b7e6d5975fd49e6427cb903a02`.
 The Cargo source override keeps the USB driver trait crate on the same revision;
 it does not apply source changes to the Synopsys driver.
+
+The next [refactoring stage](docs/refactoring.md) covers peripheral ownership,
+PAC-backed HAL APIs, reusable drivers and replacing the temporary text protocol
+with typed postcard-rpc endpoints/topics, including buffered logging.
 
 The port explicitly configures:
 

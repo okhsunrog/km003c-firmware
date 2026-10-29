@@ -6,6 +6,8 @@ use cortex_m_rt::{entry, exception};
 use embassy_hc32::pac::interrupt;
 
 mod aw9523;
+#[cfg(feature = "pd-tx-test")]
+mod cc_frontend;
 mod display;
 #[cfg(feature = "measurement")]
 mod lines;
@@ -21,6 +23,8 @@ mod pd_buffered;
 pub mod pd_capture;
 #[cfg(feature = "pd-sink")]
 mod pd_fast;
+#[cfg(feature = "pd-sink")]
+mod pd_session;
 #[cfg(feature = "pd-sink")]
 mod pd_sink;
 #[cfg(feature = "pd-tx-test")]
@@ -111,6 +115,14 @@ fn return_to_loader(status: u32) -> ! {
     cortex_m::peripheral::SCB::sys_reset()
 }
 
+/// Normal recovery can await the external expander before resetting the MCU.
+/// Fault handlers cannot run I2C; they still stop the direct TX hardware above.
+async fn enter_loader(status: u32) -> Result<(), &'static str> {
+    #[cfg(feature = "pd-tx-test")]
+    pd_tx::release_and_wait().await?;
+    return_to_loader(status)
+}
+
 #[entry]
 fn main() -> ! {
     retention_log::init();
@@ -167,6 +179,21 @@ fn main() -> ! {
         )
         .unwrap();
     }
+    let (aw, _aw_routes) = unsafe { aw9523::Aw9523::new() };
+    // USB core/PHY startup still has synchronous settling delays. Finish those
+    // before polling any async I2C operation: otherwise a pending AW transfer
+    // can spend its entire timeout waiting for this executor to resume.
+    unsafe { write_volatile(MARKER.add(4), 1) };
+    static USB_OUT: static_cell::StaticCell<[u8; 256]> = static_cell::StaticCell::new();
+    let usb_start = embassy_time::Instant::now();
+    let (usb_driver, usb_route) = unsafe { usb::driver(USB_OUT.init([0; 256])) };
+    log::info!(
+        "USB hardware startup: {} ms",
+        usb_start.elapsed().as_millis()
+    );
+    unsafe { write_volatile(MARKER.add(4), 2) };
+    #[cfg(feature = "pd-tx-test")]
+    cc_frontend::request(false);
     static EXECUTOR: static_cell::StaticCell<embassy_executor::Executor> =
         static_cell::StaticCell::new();
     unsafe {
@@ -175,10 +202,12 @@ fn main() -> ! {
     EXECUTOR.init(embassy_executor::Executor::new()).run(|s| {
         #[cfg(feature = "measurement")]
         measurement::init();
-        s.spawn(usb_task().unwrap());
+        s.spawn(usb_task(usb_driver, usb_route).unwrap());
         #[cfg(feature = "pd-tx-test")]
         s.spawn(pd_tx::lease_task().unwrap());
-        s.spawn(ui::task().unwrap());
+        s.spawn(ui::task(aw).unwrap());
+        #[cfg(feature = "pd-tx-test")]
+        s.spawn(cc_frontend::task(aw).unwrap());
         #[cfg(feature = "measurement")]
         {
             s.spawn(measurement::task().unwrap());
@@ -212,15 +241,10 @@ fn INT081() {
 }
 
 #[embassy_executor::task]
-async fn usb_task() {
-    unsafe {
-        write_volatile(MARKER.add(4), 1);
-    }
-    static OUT: static_cell::StaticCell<[u8; 256]> = static_cell::StaticCell::new();
-    let (driver, _route) = unsafe { usb::driver(OUT.init([0; 256])) };
-    unsafe {
-        write_volatile(MARKER.add(4), 2);
-    }
+async fn usb_task(
+    driver: embassy_usb_synopsys_otg::Driver<'static>,
+    _route: embassy_hc32::intc::Route,
+) {
     let mut config = embassy_usb::Config::new(0x5fc9, 0x0063);
     config.manufacturer = Some("KM003C experimental");
     config.product = Some(if cfg!(feature = "cdc-telemetry") {

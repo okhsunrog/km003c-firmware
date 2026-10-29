@@ -44,7 +44,7 @@ fn write32(address: usize, value: u32) {
 }
 
 /// CMP1_INP1/2 reach CC1/CC2 on the hardware-tested HW2.1 board.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Input {
     Cmp1Inp1,
     Cmp1Inp2,

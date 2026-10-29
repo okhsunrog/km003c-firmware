@@ -14,6 +14,7 @@ pub use km003c_drivers::lines::Sample;
 
 static LATEST: Mutex<CriticalSectionRawMutex, Cell<Option<Sample>>> = Mutex::new(Cell::new(None));
 static INPUT: AtomicU8 = AtomicU8::new(0);
+static DETACHED_INPUT: AtomicU8 = AtomicU8::new(0);
 static UPDATED: AtomicU32 = AtomicU32::new(0);
 #[cfg(feature = "pd-tx-test")]
 pub fn fresh() -> Option<Sample> {
@@ -33,6 +34,15 @@ pub fn cc_input() -> Option<u8> {
     }
 }
 
+#[cfg(feature = "pd-tx-test")]
+pub fn detached_input() -> Option<u8> {
+    match DETACHED_INPUT.load(Ordering::Acquire) {
+        1 => Some(1),
+        2 => Some(2),
+        _ => None,
+    }
+}
+
 fn stop(adc: &pac::Adc1) -> bool {
     for _ in 0..10_000 {
         if adc.str().read().strt().bit_is_clear() {
@@ -46,7 +56,7 @@ fn stop(adc: &pac::Adc1) -> bool {
 #[embassy_executor::task]
 pub async fn task() {
     // This task owns ADC1 and initializes the pads. The opt-in TX probe may
-    // temporarily switch PA0 to AF4, restoring analog mode before RX resumes.
+    // temporarily switch PA0/PA1 to AF4, restoring analog mode before RX resumes.
     // No later ADC operation writes a pad configuration. CMP1 observes in parallel;
     // its DAC reference does not change CMP.RVADC or the ADC reference buffer.
     let adc = unsafe { pac::Adc1::steal() };
@@ -80,7 +90,7 @@ pub async fn task() {
         }
     }
     adc.sstrl().write(|w| unsafe { w.bits(160) });
-    let (mut candidate, mut repeats) = (None, 0u8);
+    let (mut candidate, mut repeats) = ((None, None), 0u8);
     loop {
         adc.isr().modify(|_, w| w.eocaf().clear_bit());
         adc.str().write(|w| w.strt().set_bit());
@@ -93,6 +103,7 @@ pub async fn task() {
         if !stop(&adc) {
             LATEST.lock(|c| c.set(None));
             INPUT.store(0, Ordering::Relaxed);
+            DETACHED_INPUT.store(0, Ordering::Release);
             log::error!("Line ADC failed to quiesce");
             return;
         }
@@ -112,7 +123,10 @@ pub async fn task() {
             embassy_time::Instant::now().as_millis() as u32,
             Ordering::Release,
         );
-        let next = sample.and_then(|s| s.cc_input());
+        let next = (
+            sample.and_then(|s| s.cc_input()),
+            sample.and_then(|s| s.detached_cc_input()),
+        );
         if next == candidate {
             repeats = repeats.saturating_add(1);
         } else {
@@ -121,7 +135,8 @@ pub async fn task() {
         }
         // Two separate scans reject single-scan spikes during cable insertion.
         if repeats >= 2 {
-            INPUT.store(candidate.unwrap_or(0), Ordering::Relaxed);
+            INPUT.store(candidate.0.unwrap_or(0), Ordering::Relaxed);
+            DETACHED_INPUT.store(candidate.1.unwrap_or(0), Ordering::Release);
         }
         embassy_time::Timer::after_millis(20).await;
     }

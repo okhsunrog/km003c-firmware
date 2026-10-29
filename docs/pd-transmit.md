@@ -6,34 +6,42 @@ BMC transitions, and uses CMP1/DAC1/timer capture for RX. No dedicated HC32 PD
 peripheral or automatic hardware GoodCRC engine has been identified. The USB FS
 PHY on PA11/PA12 is a separate peripheral.
 
-The opt-in `pd-tx-test` feature now has a **hardware-tested CC1 transmitter**:
+The opt-in `pd-tx-test` feature now has a **hardware-tested CC1/CC2 transmitter**:
 an unloaded charger acknowledges the fixed Get_Source_Capabilities packet with
 GoodCRC. PB6 enables the CC1 sink attachment path. Pixel remains disconnected.
 The `pd-sink` feature now runs the crates.io `usbpd` 2.0.0 sink stack with
 software GoodCRC, message IDs, retries and Request/Accept/PS_RDY negotiation.
-Fixed 5/9/12/15/20 V contracts were accepted with an unloaded charger. CC2 TX,
-PPS and EPR policy are not implemented. Passive monitoring stays separate.
+Fixed 5/9/12/15/20 V contracts were accepted on CC1 with an unloaded charger.
+CC2 has also negotiated 20 V, with ADC-driven selection and a fresh stack session
+after a cable flip. PPS and EPR policy are not implemented. Passive monitoring
+stays separate. [CC2 acceptance](../hardware/cc2/README.md) preserves the new run.
 
 ## Hardware-tested probe
 
 Build with `--features pd-tx-test,orientation,manual-ui-test`. Nothing drives CC
-until an explicit CDC command. `pd attach 1` arms RX on CC1, then drives PB6 high
-for five seconds. The command requires a fresh line sample, unloaded VBUS below
-5.5 V, CC1 above 2.5 V and CC2 below 0.4 V. These preconditions match the tested
-charger's detached state; they are not a general Type-C attach algorithm.
+until an explicit CDC command. `pd attach 1` requires CC1; `pd attach auto`
+selects CC1 or CC2 from two consecutive ADC scans. The command requires a fresh
+line sample, unloaded VBUS below 5.5 V, one CC above 2.5 V and the other below
+0.4 V. RX is armed before enabling Rd for five seconds. These preconditions
+match the tested charger's detached state; they are not a general Type-C attach
+algorithm.
 
 `pd getcaps` permits exactly one SOP Get_Source_Capabilities packet (`87 00`,
-PD3.0 sink/UFP, MessageID 0) during that lease. It requires CC1 in 0.4..2.15 V,
+PD3.0 sink/UFP, MessageID 0) during that lease. It requires the selected CC in
+0.4..2.15 V,
 no active XTAL32 on PC14/15 and an idle receiver. There are no arbitrary-frame,
 Request, EPR or reset commands. This probe cannot select a supply voltage.
 
-TX uses a dedicated static buffer, DMA1 CH1 and TimerA2 PA0 AF4. The DMA IRQ
-holds the final interval; the following overflow IRQ disables OUTEN/PC14,
-restores PA0 analog mode and rearms RX immediately. ADC1's watchdog stays off.
+TX uses a dedicated static buffer, DMA1 CH1 and TimerA2. CC1 uses PA0 AF4,
+PWM channel 1 and PC14; CC2 uses PA1 AF4, channel 2 and PC15. The DMA IRQ
+holds the final interval; the following overflow IRQ disables the selected
+OUTEN/gate, restores the PA pin's analog mode and rearms RX immediately.
+ADC1's watchdog stays off.
 IRQ transitions and timeout cleanup share a critical section. TX uses a
 five-millisecond `embassy_time::with_timeout`; a drop guard also releases an
 unfinished waveform on cancellation. A separate async lease task releases CC
-after five seconds (30 seconds for an active sink session), using a generation
+after five seconds (session duration plus ten seconds for an active sink), using
+a generation
 check so an older deadline cannot detach a renewed lease. These timers require
 executor progress. `pd stop`, actual USB disconnect and fault/reset also release
 the controls. Dropping a host interface alone need not cause a USB disconnect.
@@ -169,8 +177,11 @@ on CC1 with an unloaded charger. This does not prove transistor topology,
 resistor values, active polarity at a hidden switch, direct CC continuity,
 VCONN routing, or the
 physical implementation of the lightning button's startup pulldown. Labeling
-P0_3 as a hardware-confirmed CC2 Rd control or PC14/15 pull-ups as confirmed Rp
-resistors would still go beyond this evidence. Continuity/component tracing
+PC14/15 pull-ups as confirmed Rp resistors would still go beyond this evidence.
+P0_3 low/output has now enabled CC2 sink attachment and 20 V negotiation on this
+unit; release uses CONFIG0 input/high-Z, with register readback. This establishes
+its role as the CC2 Rd control, without identifying the external transistor or
+resistor network. Continuity/component tracing
 and analog level/impedance measurements remain necessary to finish the schematic.
 
 ## Encoding verified without the device
@@ -239,10 +250,33 @@ cargo build --release --locked --features pd-sink,orientation,manual-ui-test
 uv run tools/bench.py trigger-20v --sink 20 --seconds 10
 ```
 
-CDC accepts `pd sink 5`, `9`, `12`, `15` or `20`. Each explicit session starts
-on detached CC1, runs for up to 20 seconds and releases PB6 on stop/cancellation.
-An independent 30-second CC lease still bounds a stalled task. No session starts
-on USB enumeration. `pd stop`, Exit and `loader` retain recovery behavior.
+CDC accepts `pd sink 5`, `9`, `12`, `15` or `20`, with an optional duration in
+seconds (1..600, default 20). Each explicit session starts on the uniquely
+detected detached CC. The selected input/PWM/gate stay locked while attached;
+three invalid 20 ms observations end that attachment. The owner drops the
+stack, releases both Rd paths, selects the new detached orientation and creates
+a new sink with fresh protocol state. The original overall session deadline
+still applies. No session starts on USB enumeration.
+
+CC1 Rd uses PB6 high; release drives it low. CC2 uses AW9523 P0_3: first latch
+low, then enable GPIO output; release selects input/high-Z. P1_6 stays unchanged.
+The expander and accelerometer share Embassy's async `I2cDevice` bus adapter.
+A separate expander mutex protects complete read-modify-write sequences against
+panel reset/backlight changes. A worker owns CC2 updates even if its caller is
+cancelled. Normal stop and `loader` await confirmed high-Z before reporting
+detach/reset; failures are reported rather than treated as a detach. Fault
+handlers stop direct TX immediately but cannot perform async I2C, so external
+CC2 Rd release cannot be guaranteed during a panic or a persistent bus failure.
+
+The independent CC lease expires ten seconds beyond the requested session
+duration (30 seconds by default). It queues expander release in addition to
+stopping direct outputs. These are task-driven bench bounds, not a complete
+Type-C connection manager or a hardware watchdog. `pd stop`, Exit and `loader`
+retain recovery behavior. For a longer orientation check:
+
+```sh
+uv run tools/bench.py orientation --sink 20 --sink-seconds 300 --seconds 290
+```
 
 ## Timing and profiling
 

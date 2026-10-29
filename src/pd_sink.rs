@@ -1,4 +1,4 @@
-//! CC1 software PHY adapter for the crates.io usbpd sink stack.
+//! Selected-CC software PHY adapter for the crates.io usbpd sink stack.
 //! The stack owns GoodCRC, IDs, retries, reset handling and power negotiation.
 use crate::{pd_buffered::Buffered, pd_tx, telemetry};
 use core::sync::atomic::{AtomicU32, Ordering};

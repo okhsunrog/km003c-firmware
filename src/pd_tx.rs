@@ -1,8 +1,8 @@
-//! HW2.1 CC1 timer/DMA transmitter, shared by the fixed GetCaps bench probe and
+//! HW2.1 CC1/CC2 timer/DMA transmitter, shared by the fixed GetCaps bench probe and
 //! the usbpd sink stack. The stack supplies Requests, GoodCRC and reset frames;
 //! this module handles waveform completion, cancellation and CC termination.
-//! PB6 follows native 2.0.7 mode 1.
-use crate::pd_capture::{read8, read16, stop_events, write16};
+//! PB6 / AW9523 P0_3 follow native 2.0.7 sink modes 1 / 2.
+use crate::pd_capture::{Input, read8, read16, stop_events, write16};
 use core::{
     cell::UnsafeCell,
     future::poll_fn,
@@ -17,9 +17,47 @@ use km003c_drivers::pd::{
 const TIMER: usize = 0x40015400;
 const DMA: usize = 0x40053000;
 const PA0: usize = 0x40053c00;
+const PA1: usize = PA0 + 4;
 const PB6: usize = 0x40053c58;
 const PC14: usize = 0x40053cb8;
 const PC15: usize = 0x40053cbc;
+// The selected PA/PC output pair and TimerA2 PWM channel are locked for an
+// attachment. Native 0x40ab0 maps CC1 to channel 1, CC2 to channel 2.
+static INPUT: AtomicU8 = AtomicU8::new(1);
+struct Pins {
+    pa: usize,
+    gate: usize,
+    pconr: usize,
+    cconr: usize,
+    bit: u16,
+}
+fn pins() -> Pins {
+    if INPUT.load(Ordering::Acquire) == 2 {
+        Pins {
+            pa: PA1,
+            gate: PC15,
+            pconr: TIMER + 0x144,
+            cconr: TIMER + 0x104,
+            bit: 1 << 15,
+        }
+    } else {
+        Pins {
+            pa: PA0,
+            gate: PC14,
+            pconr: TIMER + 0x140,
+            cconr: TIMER + 0x100,
+            bit: 1 << 14,
+        }
+    }
+}
+pub fn input() -> Input {
+    if INPUT.load(Ordering::Acquire) == 2 {
+        Input::Cmp1Inp2
+    } else {
+        Input::Cmp1Inp1
+    }
+}
+
 // 0=idle, 1=DMA, 2=last interval, 3=wire done, 4=fault, 5=deadline.
 static STATE: AtomicU8 = AtomicU8::new(0);
 static LEASE: AtomicU32 = AtomicU32::new(0);
@@ -95,10 +133,10 @@ pub fn attached() -> bool {
     LEASE.load(Ordering::Acquire) != 0
 }
 #[cfg(feature = "pd-sink")]
-pub fn extend_lease() {
+pub fn extend_lease(seconds: u16) {
     cortex_m::interrupt::free(|_| {
         if attached() {
-            arm_lease(30_000);
+            arm_lease((u64::from(seconds) + 10) * 1000);
         }
     });
 }
@@ -116,25 +154,82 @@ fn bounded_measurements() -> Result<(), &'static str> {
     Ok(())
 }
 
-/// Must be called only by the capture owner after RX is armed on CC1.
-pub fn attach() -> Result<(), &'static str> {
+/// Release both termination paths and select a detached orientation from ADC.
+/// The caller arms that receiver input BEFORE enabling Rd, to capture the first
+/// Source Capabilities. Ambiguous/stale samples never enable either output.
+pub async fn prepare() -> Result<Input, &'static str> {
+    release_and_wait().await?;
+    let end = embassy_time::Instant::now() + embassy_time::Duration::from_millis(250);
+    loop {
+        bounded_measurements()?;
+        if let Some(n) = crate::lines::detached_input()
+            .filter(|&n| crate::lines::fresh().and_then(|s| s.detached_cc_input()) == Some(n))
+        {
+            return Ok(if n == 2 {
+                Input::Cmp1Inp2
+            } else {
+                Input::Cmp1Inp1
+            });
+        }
+        if embassy_time::Instant::now() >= end {
+            return Err("waiting for detached charger orientation");
+        }
+        embassy_time::Timer::after_millis(20).await;
+    }
+}
+/// Caller exclusively owns an RX input already armed on the selected CC.
+pub async fn attach(selected: Input) -> Result<(), &'static str> {
     bounded_measurements()?;
-    let s = crate::lines::fresh().ok_or("line ADC stale")?;
-    if s.uv[0] < 2_500_000 || s.uv[1] > 400_000 || attached() {
-        return Err("requires detached charger on CC1 only");
+    let sample = crate::lines::fresh().ok_or("line ADC stale")?;
+    if sample.detached_cc_input() != Some(selected.number()) || attached() {
+        return Err("detached ADC orientation changed");
+    }
+    INPUT.store(selected.number(), Ordering::Release);
+    if selected == Input::Cmp1Inp2 {
+        crate::cc_frontend::set(true)
+            .await
+            .map_err(|_| "CC2 Rd update failed")?;
     }
     cortex_m::interrupt::free(|_| {
         USED.store(false, Ordering::Release);
         arm_lease(5000);
-        // PB6 push-pull, default drive, no pull-up: native 0x40b12(1).
-        // Latch first, then enable. Do not touch AW9523 or the other CC line.
-        write16(0x40053818, 1 << 6);
+        // Native 0x40b12(1) drives PB6 high; mode 2 uses expander P0_3 low.
+        // Set PB6's latch before its direction and keep it low on CC2.
+        write16(0x4005381a, 1 << 6);
+        if selected == Input::Cmp1Inp1 {
+            write16(0x40053818, 1 << 6);
+        }
         write16(0x40053bfc, 0xa501);
         write16(PB6 + 2, 0);
         write16(PB6, 3);
         write16(0x40053bfc, 0xa500);
     });
     Ok(())
+}
+/// A physical disconnect/flip must be stable across several ADC scans. TX's
+/// selected pin never changes in flight; the owner drops the stack and releases
+/// outputs before restarting with the new orientation and fresh protocol state.
+#[cfg(feature = "pd-sink")]
+pub async fn disconnected() {
+    let selected = input().number();
+    let mut invalid = 0;
+    loop {
+        embassy_time::Timer::after_millis(20).await;
+        if crate::lines::fresh().and_then(|s| s.cc_input()) == Some(selected) && attached() {
+            invalid = 0;
+        } else {
+            invalid += 1;
+        }
+        if invalid >= 3 {
+            return;
+        }
+    }
+}
+pub async fn release_and_wait() -> Result<(), &'static str> {
+    release();
+    crate::cc_frontend::set(false)
+        .await
+        .map_err(|_| "CC2 release not confirmed")
 }
 
 fn stop_tx_dma() -> bool {
@@ -143,11 +238,12 @@ fn stop_tx_dma() -> bool {
     (0..2000).any(|_| r(DMA + 0x24) & (2 << 16) == 0)
 }
 fn outputs_off() {
-    write16(TIMER + 0x140, 0xe0); // OUTEN off, no peripheral waveform at PA0.
+    let p = pins();
+    write16(p.pconr, 0xe0); // OUTEN off on the selected PWM channel.
     write16(0x40053bfc, 0xa501);
-    write16(PC14, read16(PC14) & !2);
-    write16(PA0 + 2, 0);
-    write16(PA0, 0x8000); // Restore ADC/CMP analog input, digital output off.
+    write16(p.gate, read16(p.gate) & !2);
+    write16(p.pa + 2, 0);
+    write16(p.pa, 0x8000); // Restore ADC/CMP analog input, digital output off.
     write16(0x40053bfc, 0xa500);
 }
 /// Safe from timeout, cancellation, fault/reset or CDC disconnect, even before RX init.
@@ -156,6 +252,7 @@ pub fn release() {
     cortex_m::interrupt::free(|_| {
         let leased = LEASE.swap(0, Ordering::AcqRel) != 0;
         LEASE_CHANGED.signal(None);
+        crate::cc_frontend::request(false);
         if matches!(STATE.load(Ordering::Acquire), 1 | 2) {
             stop_events();
             let _ = stop_tx_dma();
@@ -186,7 +283,8 @@ fn on_interrupt_locked(kind: u8) -> bool {
             w(DMA + 0x18, 2 | (2 << 16));
             // The final reload is already loaded. Hold its output, clear the
             // old overflow flag and wait for that LAST interval to elapse.
-            write16(TIMER + 0x140, (read16(TIMER + 0x140) & !0xc0) | 0x80);
+            let p = pins();
+            write16(p.pconr, (read16(p.pconr) & !0xc0) | 0x80);
             STATE.store(2, Ordering::Release);
             crate::pd_capture::write8(TIMER + 0x81, 0x10);
         }
@@ -219,8 +317,8 @@ fn on_interrupt_locked(kind: u8) -> bool {
 pub async fn get_caps(rx: &mut crate::pd_buffered::Buffered) -> Result<usize, &'static str> {
     bounded_measurements()?;
     let s = crate::lines::fresh().ok_or("line ADC stale")?;
-    if !attached() || !(400_000..=2_150_000).contains(&s.uv[0]) || s.uv[1] > 400_000 {
-        return Err("CC1 sink lease required");
+    if !attached() || s.cc_input() != Some(input().number()) {
+        return Err("selected CC sink lease required");
     }
     // PC14/15 are oscillator pads. Never override an active XTAL32 source.
     if read8(0x40054420) & 1 == 0 {
@@ -277,18 +375,19 @@ pub async fn transmit(
         if !attached() {
             return Err("lease expired");
         }
-        // Native PA0 AF4 configuration has POUTE=0; Timer OUTEN owns waveform.
+        let p = pins();
+        // Native selected PA AF4 configuration has POUTE=0; Timer OUTEN owns waveform.
         write16(0x40053bfc, 0xa501);
         write16(PC14, 0);
         write16(PC15, 0);
-        write16(PC14 + 2, 0);
-        write16(PA0, 0);
-        write16(PA0 + 2, 4);
+        write16(p.gate + 2, 0);
+        write16(p.pa, 0);
+        write16(p.pa + 2, 4);
         write16(0x40053bfc, 0xa500);
-        write16(0x4005382a, 1 << 14);
-        write16(0x40053826, read16(0x40053826) | (1 << 14));
-        write16(TIMER + 0x100, 0); // Channel 1 PWM, not capture.
-        write16(TIMER + 0x140, 0x10e0);
+        write16(0x4005382a, p.bit);
+        write16(0x40053826, read16(0x40053826) | p.bit);
+        write16(p.cconr, 0); // Selected channel PWM, not capture.
+        write16(p.pconr, 0x10e0);
         w(DMA + 0x14, 2 | (2 << 16));
         w(DMA + 0x18, 2 | (2 << 16));
         let ptr = BUFFER.0.get().cast::<u16>();

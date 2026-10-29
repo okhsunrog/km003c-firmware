@@ -1,0 +1,78 @@
+{
+  "device_hw": "2.1",
+  "hclk_hz": 192000000,
+  "features": [
+    "pd-bench",
+    "orientation"
+  ],
+  "usbpd": "2.0.0",
+  "source": "unloaded charger, Pixel disconnected",
+  "application_readback_matches_package": true,
+  "bootloader_unchanged": true,
+  "bootloader_compared_range": "0x00000004..0x00003fff",
+  "bootloader_sha256": "17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf",
+  "image_sha256": "24cfd37191ee4f80c3fc01f037e682d78c9646e55ae1f1fcc7ae274f9ae1f1e5",
+  "final_raw_rebuild_matches_tested_raw_image": true,
+  "auto_attachment_order": [
+    1,
+    2,
+    1
+  ],
+  "contracts": [
+    {
+      "input": 1,
+      "target_mv": 20000,
+      "contract_ready": true,
+      "voltage_median_uv": 19979290,
+      "cc_median_uv": 1630636,
+      "tx_count": 4,
+      "source_cap_goodcrc_rx_to_tx_us": 106.85416666666667,
+      "source_cap_decode_us": 49.895833333333336
+    },
+    {
+      "input": 2,
+      "target_mv": 20000,
+      "contract_ready": true,
+      "voltage_median_uv": 19981244,
+      "cc_median_uv": 1627778,
+      "tx_count": 4,
+      "source_cap_goodcrc_rx_to_tx_us": 107.09375,
+      "source_cap_decode_us": 49.895833333333336
+    },
+    {
+      "input": 1,
+      "target_mv": 20000,
+      "contract_ready": true,
+      "voltage_median_uv": 19980462,
+      "cc_median_uv": 1629818,
+      "tx_count": 4,
+      "source_cap_goodcrc_rx_to_tx_us": 107.15625,
+      "source_cap_decode_us": 49.895833333333336
+    }
+  ],
+  "last_attachment_stats": {
+    "type": "pd_stats",
+    "frames": 15,
+    "overruns": 6,
+    "held_overruns": 0,
+    "noise": 4,
+    "full": 0,
+    "dma_errors": 0,
+    "mismatches": 0,
+    "stop_faults": 0,
+    "input_switches": 0,
+    "switch_discards": 0,
+    "max_handler_cycles": 939,
+    "decode_errors": 0,
+    "sync_errors": 0
+  },
+  "telemetry_drops": 0,
+  "accel_error_records": 0,
+  "host_invalid_lines": 0,
+  "after_stop": {
+    "max_vbus_uv": 1462,
+    "min_detached_cc1_uv": 3178973,
+    "max_cc2_uv": 0
+  },
+  "stock_reinstalled": false
+}

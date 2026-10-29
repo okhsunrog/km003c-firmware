@@ -24,8 +24,9 @@ image and `tools/usb_echo.py` remain available for USB transport regression test
 | `pd 1` | One passive burst from CMP1_INP1 / PA0 |
 | `pd 2` | One passive burst from CMP1_INP2 / PA1 |
 | `pd attach 1` | With `pd-tx-test` only: unloaded CC1 sink attachment for five seconds |
+| `pd attach auto` | With `pd-tx-test`: choose detached CC1/CC2 from ADC, then attach for five seconds |
 | `pd getcaps` | With `pd-tx-test` only: one fixed Get_Source_Capabilities per lease |
-| `pd sink 5/9/12/15/20` | With `pd-sink`: negotiate the selected fixed voltage on CC1 for up to 20 seconds |
+| `pd sink 5/9/12/15/20 [seconds]` | With `pd-sink`: automatic CC1/CC2, fixed voltage, duration 1..600 s (default 20) |
 | `pd bench` | With `pd-bench`: capture Source Capabilities at 5 V, detach, compare completed-burst decoders using DWT |
 | `time bench` | With `pd-bench`: test TimerA alarms, start-phase quantization, wraps and IRQ costs without CC attachment |
 | `loader` | Request native DFU and reset |
@@ -33,7 +34,7 @@ image and `tools/usb_echo.py` remain available for USB transport regression test
 PD commands require `pd-capture`. On the tested HW2.1, inputs 1/2 correspond to
 CC1/CC2 on PA0/PA1. Inputs become analog with outputs and pull-ups disabled. TX
 outputs, VCOUT, CC termination and GoodCRC generation remain disabled in passive
-builds. The separate [bounded CC1 TX probe](pd-transmit.md) requires `pd-tx-test`
+builds. The separate [bounded TX probe](pd-transmit.md) requires `pd-tx-test`
 and explicit attach/GetCaps commands. `pd stop` also releases its outputs. DAC code
 `0x20` follows the native configuration. Only a command starts acquisition.
 
@@ -70,6 +71,8 @@ about 12.75 µs after the last edge at the configured 12 MHz timer clock.
 - `pd_capture_error`: timeout, DMA error, full buffer or count mismatch.
 - `pd_registers`: post-cancellation snapshot in the order below.
 - `pd_input`: selected comparator input, including automatic switches.
+- `pd_cc`: active-session `attached`, `released`, `reorienting` and `waiting`,
+  with selected input.
 
 Legacy `pd_packet.ms` is processing uptime, **not a hardware wire timestamp**.
 Buffered builds use `end_us`, IRQ-observed end uptime with approximately
@@ -112,6 +115,10 @@ sink session without passive/probe options. `pd_sink` records distinguish
 decode phases documented in [PD transmission](pd-transmit.md). ADC records
 provide the independent measured voltage. These commands change charger output;
 the hardware acceptance tests used an unloaded charger, with Pixel disconnected.
+`--sink-seconds 300 --seconds 290` keeps one commanded session available for a
+longer cable-flip check. Each new attachment creates fresh usbpd state; the
+selected line never changes during a transmit. A stop awaits CC2 expander
+release. `release_failed` means high-Z was not confirmed.
 
 `uv run tools/bench.py clock --time-bench --seconds 10` records `time_bench`,
 `time_bench_samples`, `time_irq_cost` and `time_bench_done`. It measures timeouts

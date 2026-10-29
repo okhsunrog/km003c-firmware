@@ -111,8 +111,7 @@ fn chrome(display: &mut crate::display::Display, tile: &mut UiTile) {
 }
 
 #[embassy_executor::task]
-pub async fn task() {
-    let mut aw = unsafe { crate::aw9523::Aw9523::new() };
+pub async fn task(aw: crate::aw9523::Aw9523) {
     aw.lcd_reset().await.unwrap();
     aw.backlight(0).await.unwrap();
     let mut display = unsafe { crate::display::Display::new() };
@@ -122,7 +121,9 @@ pub async fn task() {
         crate::measurement::factory_settings(id, &block);
     }
     #[cfg(feature = "orientation")]
-    let mut orientation = crate::orientation::probe(aw.bus_mut()).await;
+    let mut sensor_bus = aw.sensor_bus();
+    #[cfg(feature = "orientation")]
+    let mut orientation = crate::orientation::probe(&mut sensor_bus).await;
     #[cfg(feature = "orientation")]
     let mut rotation = if orientation.is_some() { 3 } else { 0 };
     #[cfg(feature = "orientation")]
@@ -156,7 +157,7 @@ pub async fn task() {
     loop {
         #[cfg(feature = "orientation")]
         if let Some(sensor) = orientation.as_mut() {
-            let next = sensor.poll(aw.bus_mut()).await;
+            let next = sensor.poll(&mut sensor_bus).await;
             if next != rotation {
                 rotation = next;
                 display.set_rotation(rotation);
@@ -340,8 +341,11 @@ pub async fn task() {
         } else {
             held_exit = 0;
         }
-        if held_exit >= 100 {
-            crate::return_to_loader(0x600d0002);
+        if held_exit >= 100
+            && let Err(e) = crate::enter_loader(0x600d0002).await
+        {
+            log::error!("Loader entry failed: {e}");
+            held_exit = 0;
         }
         embassy_time::Timer::after_millis(20).await;
     }

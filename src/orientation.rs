@@ -1,8 +1,8 @@
-//! SC7A20-family orientation on shared I2C3. The UI exclusively owns this bus;
-//! sensor reads therefore cannot race AW9523 reset/backlight transactions.
+//! SC7A20-family orientation on shared I2C3. AW9523 and sensor operations share
+//! an async bus mutex, including CC termination changes.
 use core::cell::Cell;
-use embassy_hc32::i2c::I2c3;
 use embassy_sync::blocking_mutex::{Mutex, raw::CriticalSectionRawMutex};
+use embedded_hal_async::i2c::I2c;
 use km003c_drivers::sc7a20::{Filter, Sc7a20};
 #[derive(Clone, Copy, Debug)]
 struct State {
@@ -26,7 +26,7 @@ pub struct Controller {
     filter: Filter,
     last: embassy_time::Instant,
 }
-pub async fn probe(bus: &mut I2c3) -> Option<Controller> {
+pub async fn probe(bus: &mut impl I2c) -> Option<Controller> {
     match Sc7a20::configure(bus).await {
         Ok(sensor) => {
             STATE.lock(|c| {
@@ -53,7 +53,7 @@ pub async fn probe(bus: &mut I2c3) -> Option<Controller> {
     }
 }
 impl Controller {
-    pub async fn poll(&mut self, bus: &mut I2c3) -> u8 {
+    pub async fn poll(&mut self, bus: &mut impl I2c) -> u8 {
         let mut s = STATE.lock(Cell::get);
         if s.error || self.last.elapsed() < embassy_time::Duration::from_millis(100) {
             return s.rotation;

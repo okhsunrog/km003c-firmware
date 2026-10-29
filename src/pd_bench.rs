@@ -2,7 +2,6 @@
 //! in one image, on identical cached data; never benchmark inside a GoodCRC path.
 use crate::{
     pd_buffered::Buffered,
-    pd_capture::Input,
     pd_fast,
     telemetry::{self, Line},
 };
@@ -131,10 +130,11 @@ async fn gate() -> Result<u32, &'static str> {
 }
 pub async fn run(rx: &mut Buffered) -> Result<(), &'static str> {
     let mut live = [0u16; 860];
-    if !rx.start(Input::Cmp1Inp1) {
+    let selected = crate::pd_tx::prepare().await?;
+    if !rx.start(selected) {
         return Err("benchmark RX DMA did not stop");
     }
-    crate::pd_tx::attach()?;
+    crate::pd_tx::attach(selected).await?;
     let capture = embassy_time::with_timeout(embassy_time::Duration::from_secs(2), async {
         loop {
             let Some(f) = rx.frame() else {
@@ -153,7 +153,7 @@ pub async fn run(rx: &mut Buffered) -> Result<(), &'static str> {
         }
     })
     .await;
-    crate::pd_tx::release();
+    crate::pd_tx::release_and_wait().await?;
     if !rx.stop() {
         return Err("benchmark RX DMA did not stop");
     }

@@ -19,9 +19,12 @@ cargo build --release --locked --features cdc-telemetry,orientation,manual-ui-te
 ```
 
 `orientation` is opt-in. SC7A20 and AW9523B share I2C3, PC13 SDA / PH2 SCL,
-100 kHz. The UI task owns the bus, borrowing it for sensor transactions and
-backlight/reset operations in sequence. No second controller owner or concurrent
-I2C transaction is created.
+100 kHz. One async mutex owns the physical controller; the accelerometer and
+AW9523 use separate Embassy `I2cDevice` handles. A second mutex protects complete
+AW9523 register-update sequences, including CC2 Rd changes from the PD task.
+Sensor transactions can run between expander transactions without interleaving
+another expander read-modify-write sequence. No second controller owner is
+created. [CC2 acceptance](../hardware/cc2/README.md) exercises this sharing.
 
 The driver checks ID before all configuration writes, powers down acquisition,
 sets 10 Hz, high-resolution ±2 g and BDU, then reads back the configuration.

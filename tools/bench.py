@@ -39,6 +39,7 @@ def main() -> None:
     parser.add_argument("--loader", action="store_true")
     parser.add_argument("--cc1-probe", choices=["attach", "getcaps"])
     parser.add_argument("--sink", choices=["5", "9", "12", "15", "20"])
+    parser.add_argument("--sink-seconds", type=int, default=20)
     parser.add_argument("--pd-bench", action="store_true")
     parser.add_argument("--time-bench", action="store_true")
     parser.add_argument(
@@ -75,7 +76,7 @@ def main() -> None:
     if args.cc1_probe:
         command += ["--cc1-probe", args.cc1_probe]
     if args.sink:
-        command += ["--sink", args.sink]
+        command += ["--sink", args.sink, "--sink-seconds", str(args.sink_seconds)]
     if args.pd_bench:
         command.append("--pd-bench")
     if args.time_bench:

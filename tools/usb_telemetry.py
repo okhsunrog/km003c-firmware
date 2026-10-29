@@ -80,10 +80,11 @@ def main() -> None:
     parser.add_argument(
         "--sink",
         choices=["5", "9", "12", "15", "20"],
-        help="Explicit unloaded-charger usbpd sink session (CC1)",
+        help="Explicit unloaded-charger usbpd sink session (automatic CC1/CC2)",
     )
     parser.add_argument("--wait", type=float, default=10)
     parser.add_argument("--seconds", type=float, default=20)
+    parser.add_argument("--sink-seconds", type=int, default=20)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--pd",
@@ -115,6 +116,8 @@ def main() -> None:
         help="Delay host reads to test backpressure",
     )
     args = parser.parse_args()
+    if not 1 <= args.sink_seconds <= 600:
+        parser.error("--sink-seconds must be in 1..600")
     if args.sink and (args.cc1_probe or args.pd or args.pause_read):
         parser.error("--sink is exclusive with capture/probe/backpressure options")
     if args.time_bench and (
@@ -144,7 +147,11 @@ def main() -> None:
                 timeout=2000,
             )
         if args.sink:
-            device.write(0x01, f"pd sink {args.sink}\n".encode(), timeout=2000)
+            device.write(
+                0x01,
+                f"pd sink {args.sink} {args.sink_seconds}\n".encode(),
+                timeout=2000,
+            )
         if args.pd_bench:
             device.write(0x01, b"pd bench\n", timeout=2000)
         if args.time_bench:
