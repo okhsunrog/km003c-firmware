@@ -1,0 +1,43 @@
+{"event":{"data":{"duration_ms":2500,"name":"timeout-result","steps":[{"at_ms":0,"command":{"Sink":{"seconds":1,"volts":5}}}]},"type":"maneuver"},"host_elapsed_us":0}
+{"event":{"data":{"command":{"Sink":{"seconds":1,"volts":5}},"index":0},"type":"command"},"host_elapsed_us":2009}
+{"event":{"data":{"device_command":1,"index":0},"type":"accepted"},"host_elapsed_us":2754}
+{"event":{"data":{"State":{"command_id":1,"state":"Attached","value":1}},"type":"pd"},"host_elapsed_us":3301}
+{"event":{"data":{"State":{"command_id":1,"state":"Starting","value":5000}},"type":"pd"},"host_elapsed_us":3789}
+{"event":{"data":{"calibrated":true,"current_ua":274,"diagnostic":1,"lines_uv":[1630840,0,11241,24089],"temperature_mc":28078,"uptime_ms":8047,"voltage_uv":681},"type":"measurement"},"host_elapsed_us":221804}
+{"event":{"data":"ADC bus=4988867187 nV shunt=1250000 pV Iraw=15 I0=Some(240) uA diag=0003\n","type":"log"},"host_elapsed_us":245453}
+{"event":{"data":{"Rx":{"bytes":[143,16,1,168,0,255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"end_us":8084075,"input":1,"len":6,"sequence":3,"sop":1}},"type":"pd"},"host_elapsed_us":258590}
+{"event":{"data":{"Rx":{"bytes":[129,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"end_us":8084747,"input":1,"len":2,"sequence":4,"sop":1}},"type":"pd"},"host_elapsed_us":259423}
+{"event":{"data":{"Rx":{"bytes":[143,17,129,160,0,255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"end_us":8086425,"input":1,"len":6,"sequence":5,"sop":1}},"type":"pd"},"host_elapsed_us":260710}
+{"event":{"data":{"Rx":{"bytes":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"end_us":8086975,"input":1,"len":2,"sequence":6,"sop":1}},"type":"pd"},"host_elapsed_us":261784}
+{"event":{"data":{"Rx":{"bytes":[161,97,44,145,145,10,44,209,18,0,44,193,19,0,44,177,20,0,44,65,22,0,60,50,164,201,0,0,0,0],"end_us":8088775,"input":1,"len":26,"sequence":7,"sop":0}},"type":"pd"},"host_elapsed_us":263974}
+{"event":{"data":{"Tx":{"bytes":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"decode_cycles":9589,"len":2,"phases":[1955,5614,530,353],"rx_to_tx_cycles":20479}},"type":"pd"},"host_elapsed_us":265195}
+{"event":{"data":{"State":{"command_id":1,"state":"Request","value":5000}},"type":"pd"},"host_elapsed_us":265631}
+{"event":{"data":{"Tx":{"bytes":[130,16,10,40,0,19,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"decode_cycles":9589,"len":6,"phases":[1955,5614,530,353],"rx_to_tx_cycles":278391}},"type":"pd"},"host_elapsed_us":266940}
+{"event":{"data":{"Rx":{"bytes":[161,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"end_us":8091400,"input":1,"len":2,"sequence":10,"sop":0}},"type":"pd"},"host_elapsed_us":267837}
+{"event":{"data":{"Rx":{"bytes":[163,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"end_us":8092803,"input":1,"len":2,"sequence":11,"sop":0}},"type":"pd"},"host_elapsed_us":268804}
+{"event":{"data":{"Tx":{"bytes":[129,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"decode_cycles":4625,"len":2,"phases":[1955,1322,149,254],"rx_to_tx_cycles":14464}},"type":"pd"},"host_elapsed_us":269898}
+{"event":{"data":{"Rx":{"bytes":[166,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"end_us":8125701,"input":1,"len":2,"sequence":13,"sop":0}},"type":"pd"},"host_elapsed_us":300127}
+{"event":{"data":{"Tx":{"bytes":[129,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"decode_cycles":4673,"len":2,"phases":[1955,1255,149,254],"rx_to_tx_cycles":14513}},"type":"pd"},"host_elapsed_us":301056}
+{"event":{"data":{"State":{"command_id":1,"state":"Ready","value":5000}},"type":"pd"},"host_elapsed_us":301534}
+{"event":{"data":{"calibrated":true,"current_ua":146,"diagnostic":3,"lines_uv":[1631643,0,802,9635],"temperature_mc":28078,"uptime_ms":8298,"voltage_uv":4988861},"type":"measurement"},"host_elapsed_us":472456}
+{"event":{"data":"ADC bus=4991210937 nV shunt=937500 pV Iraw=11 I0=Some(176) uA diag=0001\n","type":"log"},"host_elapsed_us":495505}
+{"event":{"data":{"calibrated":true,"current_ua":82,"diagnostic":1,"lines_uv":[1631643,0,1605,12044],"temperature_mc":28078,"uptime_ms":8549,"voltage_uv":4991204},"type":"measurement"},"host_elapsed_us":722977}
+{"event":{"data":"ADC bus=4990039062 nV shunt=-312500 pV Iraw=-3 I0=Some(-48) uA diag=0003\n","type":"log"},"host_elapsed_us":745517}
+{"event":{"data":{"calibrated":true,"current_ua":-142,"diagnostic":3,"lines_uv":[1631643,0,13650,25695],"temperature_mc":28085,"uptime_ms":8799,"voltage_uv":4990033},"type":"measurement"},"host_elapsed_us":973700}
+{"event":{"data":"ADC bus=4989648437 nV shunt=937500 pV Iraw=11 I0=Some(176) uA diag=0001\n","type":"log"},"host_elapsed_us":995506}
+{"event":{"data":{"Stats":{"counters":[14,0,0,6,0,0,0,0,0,0,901,0]}},"type":"pd"},"host_elapsed_us":1002678}
+{"event":{"data":{"State":{"command_id":1,"state":"Detached","value":0}},"type":"pd"},"host_elapsed_us":1003105}
+{"event":{"data":{"calibrated":true,"current_ua":82,"diagnostic":1,"lines_uv":[3241605,0,1605,12847],"temperature_mc":28085,"uptime_ms":9050,"voltage_uv":4989642},"type":"measurement"},"host_elapsed_us":1224326}
+{"event":{"data":"ADC bus=1367187 nV shunt=937500 pV Iraw=11 I0=Some(176) uA diag=0003\n","type":"log"},"host_elapsed_us":1245331}
+{"event":{"data":{"calibrated":true,"current_ua":82,"diagnostic":3,"lines_uv":[3178171,0,8832,20877],"temperature_mc":28085,"uptime_ms":9301,"voltage_uv":1267},"type":"measurement"},"host_elapsed_us":1474681}
+{"event":{"data":"ADC bus=1367187 nV shunt=1250000 pV Iraw=15 I0=Some(240) uA diag=0001\n","type":"log"},"host_elapsed_us":1495280}
+{"event":{"data":{"calibrated":true,"current_ua":146,"diagnostic":1,"lines_uv":[3176565,0,8029,20074],"temperature_mc":28078,"uptime_ms":9552,"voltage_uv":1267},"type":"measurement"},"host_elapsed_us":1725557}
+{"event":{"data":"ADC bus=1562500 nV shunt=-625000 pV Iraw=-7 I0=Some(-112) uA diag=0003\n","type":"log"},"host_elapsed_us":1745365}
+{"event":{"data":{"calibrated":true,"current_ua":-206,"diagnostic":3,"lines_uv":[3177368,0,1605,11241],"temperature_mc":28078,"uptime_ms":9803,"voltage_uv":1462},"type":"measurement"},"host_elapsed_us":1975998}
+{"event":{"data":"ADC bus=976562 nV shunt=312500 pV Iraw=3 I0=Some(48) uA diag=0001\n","type":"log"},"host_elapsed_us":1995113}
+{"event":{"data":{"calibrated":true,"current_ua":-46,"diagnostic":1,"lines_uv":[3177368,0,15256,27301],"temperature_mc":28078,"uptime_ms":10053,"voltage_uv":876},"type":"measurement"},"host_elapsed_us":2226624}
+{"event":{"data":"ADC bus=1367187 nV shunt=-1562500 pV Iraw=-19 I0=Some(-304) uA diag=0003\n","type":"log"},"host_elapsed_us":2245427}
+{"event":{"data":{"calibrated":true,"current_ua":-398,"diagnostic":3,"lines_uv":[3175762,0,11241,23286],"temperature_mc":28085,"uptime_ms":10304,"voltage_uv":1267},"type":"measurement"},"host_elapsed_us":2477285}
+{"event":{"data":"ADC bus=976562 nV shunt=-625000 pV Iraw=-7 I0=Some(-112) uA diag=0001\n","type":"log"},"host_elapsed_us":2495265}
+{"event":{"data":{"State":{"command_id":2,"state":"Detached","value":0}},"type":"pd"},"host_elapsed_us":2503190}
+{"event":{"type":"finished"},"host_elapsed_us":2504072}

@@ -19,6 +19,7 @@ pub enum Record<'a> {
     Maneuver(&'a Maneuver),
     Measurement(Measurement),
     Pd(PdEvent),
+    PdSnapshot(km003c_interface::PdSnapshot),
     Log(String),
     Command { index: usize, command: PdControl },
     Accepted { index: usize, device_command: u32 },
@@ -76,7 +77,7 @@ pub async fn run(client: &Client, plan: &Maneuver, output: Option<&Path>) -> Res
                     recorder.emit(Record::Command{index,command})?;
                     let device_command=client.control(command).await?;
                     recorder.emit(Record::Accepted{index,device_command})?;
-                    if matches!(command,PdControl::Stop) {wait_detached(&mut pd,device_command,&mut recorder).await?;}
+                    if matches!(command,PdControl::Stop) {wait_detached(client,&mut pd,device_command,&mut recorder).await?;}
                     index+=1;
                 }
                 msg=measurements.recv()=>recorder.emit(Record::Measurement(msg.context("measurement stream closed")?))?,
@@ -92,7 +93,7 @@ pub async fn run(client: &Client, plan: &Maneuver, output: Option<&Path>) -> Res
     // Cleanup is attempted even if recording, decoding or a timeline command failed.
     let stop = client.control(PdControl::Stop).await;
     let detached = if let Ok(stop_id) = &stop {
-        wait_detached(&mut pd, *stop_id, &mut recorder).await
+        wait_detached(client, &mut pd, *stop_id, &mut recorder).await
     } else {
         Ok(())
     };
@@ -105,17 +106,31 @@ pub async fn run(client: &Client, plan: &Maneuver, output: Option<&Path>) -> Res
         return Err(error);
     }
     cleanup?;
+    recorder.emit(Record::PdSnapshot(client.pd_status().await?))?;
     recorder.emit(Record::Finished)
 }
 
 async fn wait_detached(
+    client: &Client,
     pd: &mut postcard_rpc::host_client::Subscription<PdEvent>,
     id: u32,
     recorder: &mut Recorder,
 ) -> Result<()> {
     tokio::time::timeout(Duration::from_secs(3), async {
+        let mut events_open=true;
         loop {
-            let event = pd.recv().await.context("PD stream closed while stopping")?;
+            let event = tokio::select! {
+                msg=pd.recv(), if events_open=>match msg {Some(event)=>event,None=>{events_open=false;continue;}},
+                _=tokio::time::sleep(Duration::from_millis(100))=>{
+                    let status=client.pd_status().await?;
+                    match confirmed_detach(&status,id) {
+                        Some(true)=>return Ok(()),
+                        Some(false)=>bail!("device could not confirm detach"),
+                        None=>{},
+                    }
+                    continue;
+                }
+            };
             let terminal = match event {
                 PdEvent::State {
                     state: PdState::Detached,
@@ -140,4 +155,34 @@ async fn wait_detached(
     })
     .await
     .context("timed out waiting for confirmed detach")?
+}
+
+fn confirmed_detach(status: &km003c_interface::PdSnapshot, id: u32) -> Option<bool> {
+    status
+        .last_command
+        .filter(|result| result.command_id == id)
+        .map(|result| result.released)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use km003c_interface::{PdCompletion, PdEndReason, PdSnapshot};
+    #[test]
+    fn snapshot_confirms_only_matching_command_without_an_event() {
+        let mut s = PdSnapshot {
+            available: true,
+            state: PdState::Detached,
+            active_command: None,
+            last_session: None,
+            last_command: Some(PdCompletion {
+                command_id: 12,
+                reason: PdEndReason::Stopped,
+                released: true,
+            }),
+        };
+        assert_eq!(confirmed_detach(&s, 11), None);
+        assert_eq!(confirmed_detach(&s, 12), Some(true));
+        s.last_command.as_mut().unwrap().released = false;
+        assert_eq!(confirmed_detach(&s, 12), Some(false));
+    }
 }

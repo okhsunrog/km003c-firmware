@@ -25,6 +25,8 @@ struct Args {
 #[derive(Subcommand)]
 enum Command {
     Status,
+    /// Current PD owner and last command/session results.
+    PdStatus,
     Capture {
         #[arg(long, default_value_t = 6)]
         seconds: u64,
@@ -157,6 +159,7 @@ async fn main() -> Result<()> {
             let client = Client::connect(selector).await?;
             match command {
                 Command::Status => println!("{:?}", client.status().await?),
+                Command::PdStatus => println!("{:?}", client.pd_status().await?),
                 Command::Loader => {
                     client.loader().await?;
                     println!("Native DFU confirmed on the selected port");

@@ -1,0 +1,1 @@
+PdSnapshot { available: true, state: Detached, active_command: None, last_session: Some(PdCompletion { command_id: 1, reason: TimedOut, released: true }), last_command: Some(PdCompletion { command_id: 2, reason: Stopped, released: true }) }

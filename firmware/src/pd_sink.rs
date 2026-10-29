@@ -195,7 +195,7 @@ impl DevicePolicyManager for Policy {
         telemetry::sink_status("transition_default", 5000);
     }
 }
-pub async fn run(rx: &mut Buffered, volts: u16) {
+pub async fn run(rx: &mut Buffered, volts: u16) -> Result<(), ()> {
     let mut sink = Sink::<_, Clock, _>::new(
         Phy { rx },
         Policy {
@@ -204,5 +204,7 @@ pub async fn run(rx: &mut Buffered, volts: u16) {
     );
     if let Err(error) = sink.run().await {
         log::warn!("PD sink stopped: {error:?}");
+        return Err(());
     }
+    Ok(())
 }

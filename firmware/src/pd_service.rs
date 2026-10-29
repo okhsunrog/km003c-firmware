@@ -5,13 +5,44 @@ use crate::{
 };
 use embassy_futures::select::{Either, select};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
-use km003c_interface::{ControlError, ControlResult, PdControl, PdEvent, PdState};
+use km003c_interface::{
+    ControlError, ControlResult, PdCompletion, PdControl, PdEndReason, PdEvent, PdSnapshot, PdState,
+};
 pub static EVENTS: Channel<CriticalSectionRawMutex, PdEvent, 32> = Channel::new();
 use core::sync::atomic::{AtomicU32, Ordering};
 // OWNER reserves a queued/running capture. Stop cannot clear a newer reservation.
 static OWNER: AtomicU32 = AtomicU32::new(0);
 static NEXT: AtomicU32 = AtomicU32::new(1);
 static CURRENT: AtomicU32 = AtomicU32::new(0);
+static SNAPSHOT: embassy_sync::blocking_mutex::Mutex<
+    CriticalSectionRawMutex,
+    core::cell::Cell<PdSnapshot>,
+> = embassy_sync::blocking_mutex::Mutex::new(core::cell::Cell::new(PdSnapshot {
+    available: false,
+    state: PdState::Detached,
+    active_command: None,
+    last_session: None,
+    last_command: None,
+}));
+pub fn snapshot() -> PdSnapshot {
+    SNAPSHOT.lock(|s| {
+        let mut x = s.get();
+        let owner = OWNER.load(Ordering::Acquire);
+        x.active_command = (owner != 0).then_some(owner);
+        x
+    })
+}
+fn complete(session: Option<PdCompletion>, command: PdCompletion) {
+    SNAPSHOT.lock(|s| {
+        let mut x = s.get();
+        if session.is_some() {
+            x.last_session = session;
+        }
+        x.last_command = Some(command);
+        s.set(x);
+    });
+}
+
 #[derive(Clone, Copy)]
 struct Request {
     id: u32,
@@ -35,6 +66,9 @@ pub fn start() {
     EXECUTOR.start(interrupt::INT030).spawn(task().unwrap());
 }
 pub fn control(command: PdControl) -> ControlResult {
+    if !snapshot().available {
+        return Err(ControlError::Unavailable);
+    }
     match command {
         PdControl::Sink { volts, seconds }
             if ![5, 9, 12, 15, 20].contains(&volts) || !(1..=600).contains(&seconds) =>
@@ -71,6 +105,11 @@ pub fn control(command: PdControl) -> ControlResult {
 }
 
 pub fn state(state: PdState, value: u32) {
+    SNAPSHOT.lock(|s| {
+        let mut x = s.get();
+        x.state = state;
+        s.set(x);
+    });
     let _ = EVENTS.try_send(PdEvent::State {
         command_id: CURRENT.load(Ordering::Acquire),
         state,
@@ -136,19 +175,42 @@ async fn task() {
         Ok(r) => r,
         Err(error) => {
             log::error!("PD initialization failed: {error}");
+            complete(
+                None,
+                PdCompletion {
+                    command_id: 0,
+                    reason: PdEndReason::InitializationError,
+                    released: false,
+                },
+            );
             state(PdState::Failed, 0);
             return;
         }
     };
+    SNAPSHOT.lock(|s| {
+        let mut x = s.get();
+        x.available = true;
+        s.set(x);
+    });
     let mut rx = Buffered::new(receiver);
     loop {
         let request = COMMANDS.receive().await;
         CURRENT.store(request.id, Ordering::Release);
         let command = request.command;
+        let mut reason = PdEndReason::Completed;
+        let mut stop_id = None;
         match command {
             PdControl::Stop => {
                 let released = crate::pd_tx::release_and_wait().await;
                 let stopped = rx.stop();
+                complete(
+                    None,
+                    PdCompletion {
+                        command_id: request.id,
+                        reason: PdEndReason::Stopped,
+                        released: released.is_ok() && stopped,
+                    },
+                );
                 state(
                     if released.is_ok() && stopped {
                         PdState::Detached
@@ -168,21 +230,50 @@ async fn task() {
                     ),
                 )
                 .await;
-                if let Either::First(stop) = outcome {
-                    CURRENT.store(stop.id, Ordering::Release);
+                match outcome {
+                    Either::First(stop) => {
+                        stop_id = Some(stop.id);
+                        reason = PdEndReason::Stopped;
+                        CURRENT.store(stop.id, Ordering::Release);
+                    }
+                    Either::Second(Err(_)) => reason = PdEndReason::TimedOut,
+                    Either::Second(Ok(Err(error))) => reason = error,
+                    Either::Second(Ok(Ok(()))) => {}
                 }
             }
             PdControl::Monitor { input } => {
                 if let Either::First(stop) =
                     select(COMMANDS.receive(), monitor(&mut rx, input)).await
                 {
+                    stop_id = Some(stop.id);
+                    reason = PdEndReason::Stopped;
                     CURRENT.store(stop.id, Ordering::Release);
+                } else {
+                    reason = PdEndReason::MonitorError;
                 }
             }
         }
         let released = crate::pd_tx::release_and_wait().await;
         let stopped = rx.stop();
-        let _ = OWNER.compare_exchange(request.id, 0, Ordering::AcqRel, Ordering::Acquire);
+        let clean = released.is_ok() && stopped;
+        let session = PdCompletion {
+            command_id: request.id,
+            reason,
+            released: clean,
+        };
+        let command = stop_id.map_or(session, |id| PdCompletion {
+            command_id: id,
+            reason: PdEndReason::Stopped,
+            released: clean,
+        });
+        // Publish completion before clearing OWNER, so idle never exposes stale results.
+        SNAPSHOT.lock(|s| {
+            let mut x = s.get();
+            x.last_session = Some(session);
+            x.last_command = Some(command);
+            s.set(x);
+            let _ = OWNER.compare_exchange(request.id, 0, Ordering::AcqRel, Ordering::Acquire);
+        });
         let s = rx.stats();
         let _ = EVENTS.try_send(PdEvent::Stats {
             counters: [

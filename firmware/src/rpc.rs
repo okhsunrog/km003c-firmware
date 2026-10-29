@@ -28,6 +28,9 @@ impl SpawnContext for Context {
 fn pd_control(_: &mut Context, _: VarHeader, command: PdControl) -> ControlResult {
     crate::pd_service::control(command)
 }
+fn pd_status(_: &mut Context, _: VarHeader, _: ()) -> PdSnapshot {
+    crate::pd_service::snapshot()
+}
 fn status(_: &mut Context, _: VarHeader, _: ()) -> Status {
     Status {
         protocol_version: PROTOCOL_VERSION,
@@ -52,6 +55,7 @@ define_dispatch! {
         | EndpointTy | kind | handler |
         | ---------- | ---- | ------- |
         | GetStatus | blocking | status |
+        | GetPdStatus | blocking | pd_status |
         | SetStream | blocking | stream |
         | EnterLoader | async | loader |
         | ControlPd | blocking | pd_control |

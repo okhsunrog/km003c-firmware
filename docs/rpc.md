@@ -59,3 +59,10 @@ publishing packets.
 acceptance. Offline decoder/time benchmark modes, fixed GetCaps probes and raw
 single-burst test commands have been removed. Decoder regression tests and
 historical measurements remain available in the driver crate and documentation.
+
+`GetPdStatus` returns current phase, availability, active command ID, the last
+completed session and the last completed command. A completion carries its
+reason and whether release was confirmed. Stop completion does not erase the
+last sink/monitor result. This snapshot is authoritative even if a bounded topic
+queue drops the terminal event; the host polls it while waiting for Stop.
+`just cli pd-status` prints the snapshot. Protocol version 3 includes this API.

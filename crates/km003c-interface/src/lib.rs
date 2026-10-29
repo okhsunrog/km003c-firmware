@@ -3,7 +3,7 @@
 use postcard_schema::Schema;
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u16 = 2;
+pub const PROTOCOL_VERSION: u16 = 3;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Schema)]
 pub struct Status {
@@ -28,6 +28,7 @@ postcard_rpc::endpoints! {
     | EndpointTy | RequestTy | ResponseTy | Path |
     | ---------- | --------- | ---------- | ---- |
     | GetStatus | () | Status | "km003c/status" |
+    | GetPdStatus | () | PdSnapshot | "km003c/pd/status" |
     | SetStream | bool | () | "km003c/stream" |
     | EnterLoader | () | LoaderResult | "km003c/loader" |
     | ControlPd | PdControl | ControlResult | "km003c/pd/control" |
@@ -63,6 +64,7 @@ pub enum PdControl {
 pub enum ControlError {
     Invalid,
     Busy,
+    Unavailable,
 }
 /// Accepted command ID; terminal events carry this ID.
 pub type ControlResult = Result<u32, ControlError>;
@@ -92,7 +94,7 @@ pub enum PdEvent {
         value: u32,
     },
 }
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Schema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub enum PdState {
     Starting,
     Request,
@@ -106,4 +108,36 @@ pub enum PdState {
     Released,
     Reorienting,
     Failed,
+}
+
+/// Terminal reason and cleanup are independent: failure can still detach safely.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
+pub enum PdEndReason {
+    Stopped,
+    TimedOut,
+    Completed,
+    RxStartFailed,
+    AttachFailed,
+    ReleaseFailed,
+    RxStopFailed,
+    StackFailed,
+    MonitorError,
+    InitializationError,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
+pub struct PdCompletion {
+    pub command_id: u32,
+    pub reason: PdEndReason,
+    pub released: bool,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
+pub struct PdSnapshot {
+    pub available: bool,
+    pub state: PdState,
+    /// Accepted non-Stop command, including one still queued for the owner.
+    pub active_command: Option<u32>,
+    /// Most recently finished sink/monitor, retained when Stop completes.
+    pub last_session: Option<PdCompletion>,
+    /// Most recently completed command, including Stop.
+    pub last_command: Option<PdCompletion>,
 }

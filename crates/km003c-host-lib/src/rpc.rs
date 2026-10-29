@@ -1,5 +1,7 @@
 use anyhow::{Result, anyhow, ensure};
-use km003c_interface::{ControlPd, EnterLoader, GetStatus, PdControl, SetStream, Status};
+use km003c_interface::{
+    ControlPd, EnterLoader, GetPdStatus, GetStatus, PdControl, SetStream, Status,
+};
 use km003c_lib::{
     DeviceSelector,
     firmware::{FirmwareUsbMode, find_firmware_device},
@@ -70,6 +72,13 @@ impl Client {
             tokio::time::timeout(Duration::from_secs(3), self.rpc.send_resp::<GetStatus>(&()))
                 .await??,
         )
+    }
+    pub async fn pd_status(&self) -> Result<km003c_interface::PdSnapshot> {
+        Ok(tokio::time::timeout(
+            Duration::from_secs(1),
+            self.rpc.send_resp::<GetPdStatus>(&()),
+        )
+        .await??)
     }
     pub async fn stream(&self, enabled: bool) -> Result<()> {
         tokio::time::timeout(
