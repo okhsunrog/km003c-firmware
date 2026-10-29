@@ -34,9 +34,9 @@ package output="artifacts/km003c.mencrypt":
     cd firmware && cargo objcopy --release --locked --bin km003c-firmware -- -O binary ../artifacts/km003c.bin
     just cli package artifacts/km003c.bin "$1"
 
-# Flash requires a saved matching backup and a NEW evidence directory.
-flash image backup evidence:
-    just cli flash "$1" --backup "$2" --evidence "$3"
+# Flash records verification in a new evidence directory.
+flash image evidence:
+    just cli flash "$1" --evidence "$2"
 
 backup output:
     just cli backup "$1"

@@ -27,7 +27,7 @@ Use active commands with an unloaded charger during development.
 
 Holding Exit for two seconds or issuing the RPC loader command returns to native
 DFU. Holding Exit while connecting power through the HID port enters that loader
-independently of application USB. Keep a verified original package for recovery.
+independently of application USB. Keep an original package available for recovery.
 Updates require readback and unchanged-loader verification. Working custom images
 stay installed between tests; there is no automatic stock restore or test timeout.
 
@@ -79,15 +79,14 @@ Install the Thumb target and cargo-binutils for firmware builds and packaging.
 
 ```sh
 just package artifacts/km003c.mencrypt
-just cli backup artifacts/backup.bin
-just flash artifacts/km003c.mencrypt artifacts/backup.bin artifacts/flash-evidence
+just flash artifacts/km003c.mencrypt artifacts/flash-evidence
 just start
 just maneuver maneuvers/passive.json artifacts/passive.ndjson
 ```
 
 `backup`, `verify`, `start` and `diagnostics` operate in native DFU. `flash`
-can enter DFU from the custom RPC application; an existing CRC-verified backup
-must match its live metadata. The evidence directory must be new. The writer
+can enter DFU from the custom RPC application. The evidence directory must be
+new. The writer
 checks the known HW2.1 loader before and after updating and compares the full
 application readback. A failed transfer leaves the device in DFU. It does not
 start the application automatically. The host reuses `km003c-lib` at a pinned

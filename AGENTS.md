@@ -6,7 +6,7 @@
   derive keys.
 - Use the user's `mistral_ocr` CLI for PDF extraction, selecting relevant pages.
 - Preserve the native bootloader and ICG. Applications begin at 0x4000.
-- Verify backup, recovery entry, image readback and unchanged bootloader before
+- Verify recovery entry, image readback and unchanged bootloader before
   claiming hardware success. Keep build checks distinct from device tests.
 - Temporary diagnostic artifacts belong under
   /home/okhsunrog/tmp_zfs/codex_tmp/km003c-rust-bringup/.

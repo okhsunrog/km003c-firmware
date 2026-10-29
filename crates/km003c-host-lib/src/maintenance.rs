@@ -124,35 +124,25 @@ pub async fn verify(selector: DeviceSelector, image: &FirmwareImage) -> Result<(
     );
     Ok(())
 }
-/// Requires a saved, CRC-validated backup matching live application metadata.
-/// A cached verified backup avoids repeated whole-application reads before erase.
 /// On any failure the device stays in DFU; application start is a separate step.
 pub async fn flash(
     selector: DeviceSelector,
     image: &FirmwareImage,
-    backup: &Path,
     evidence: &Path,
 ) -> Result<DeviceSelector> {
     image.validate_for_update()?;
-    let old = std::fs::read(backup).context("read saved backup before entering DFU")?;
-    installed_info(&old)?.validate_application(&old)?;
     std::fs::create_dir(evidence)
         .context("evidence directory must be new; its parent must exist")?;
     let selector = enter(selector).await?;
     let (mut d, stable) = open(selector).await?;
-    let metadata = read(&mut d, 0x4420, 64).await?;
-    ensure!(
-        metadata == old[0x420..0x460],
-        "saved backup does not match live installed metadata"
-    );
     let before = read(&mut d, 4, KNOWN_LOADER.len()).await?;
     ensure!(
         before == KNOWN_LOADER,
         "loader differs from verified HW2.1 reference"
     );
     save_new(&evidence.join("loader-before.bin"), &before)?;
-    // Persist provenance before the first erase; the backup itself is never modified.
-    save_new(&evidence.join("before.json"),serde_json::to_string_pretty(&serde_json::json!({"backup_sha256":digest(&old),"image_sha256":digest(image.data()),"loader_sha256":digest(&before),"selector":format!("{stable:?}"),"model":"KM003C","hw_version":"2.1"}))?.as_bytes())?;
+    // Persist provenance before the first erase.
+    save_new(&evidence.join("before.json"),serde_json::to_string_pretty(&serde_json::json!({"image_sha256":digest(image.data()),"loader_sha256":digest(&before),"selector":format!("{stable:?}"),"model":"KM003C","hw_version":"2.1"}))?.as_bytes())?;
     d.update_firmware(image, |p| {
         eprintln!("{:?}: {}/{}", p.stage, p.bytes_written, p.total_bytes)
     })

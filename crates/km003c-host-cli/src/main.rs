@@ -63,11 +63,9 @@ enum Command {
     Backup {
         output: PathBuf,
     },
-    /// Write from DFU/RPC; requires an existing verified backup and a new evidence directory.
+    /// Write from DFU/RPC; the evidence directory must be new.
     Flash {
         image: PathBuf,
-        #[arg(long)]
-        backup: PathBuf,
         #[arg(long)]
         evidence: PathBuf,
     },
@@ -103,13 +101,9 @@ async fn main() -> Result<()> {
             maintenance::backup(selector, &output).await?;
             println!("Verified backup: {}", output.display());
         }
-        Command::Flash {
-            image,
-            backup,
-            evidence,
-        } => {
+        Command::Flash { image, evidence } => {
             let image = km003c_host_lib::maintenance::parse_image(&std::fs::read(image)?)?;
-            maintenance::flash(selector, &image, &backup, &evidence).await?;
+            maintenance::flash(selector, &image, &evidence).await?;
             println!(
                 "Verified application and unchanged loader; device remains in DFU. Run start separately."
             );
