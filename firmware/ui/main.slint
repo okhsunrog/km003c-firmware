@@ -1,0 +1,60 @@
+import "fonts/LiberationSans-Regular.ttf";
+
+export component MeterWindow inherits Window {
+    width: 240px;
+    height: 240px;
+    background: #090f18;
+    default-font-family: "Liberation Sans";
+    default-font-size: 14px;
+    in property <string> voltage: "-- V";
+    in property <string> current: "-- A";
+    in property <string> power: "-- W";
+    in property <string> temperature: "-- C";
+    in property <string> calibration: "WAIT";
+    in property <string> cc1: "--";
+    in property <string> cc2: "--";
+    in property <string> dp: "--";
+    in property <string> dm: "--";
+    in property <string> pd-state: "IDLE";
+    private property <int> page: 0;
+    forward-focus: keys;
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.LeftArrow || event.text == Key.RightArrow || event.text == Key.Return {
+                root.page = 1 - root.page;
+                accept
+            } else if event.text == Key.Escape {
+                root.page = 0;
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+    Rectangle { x: 0; y: 0; width: 240px; height: 3px; background: #33d9d0; }
+    Text { x: 12px; y: 10px; text: "POWER / Z"; color: #e6f4f4; font-size: 14px; }
+    Text { x: 155px; y: 12px; width: 73px; horizontal-alignment: right; text: root.calibration; color: #54d9a5; font-size: 14px; }
+    Text { x: 12px; y: 33px; text: "METER"; color: root.page == 0 && keys.has-focus ? #33d9d0 : #697b8d; font-size: 14px; }
+    Text { x: 86px; y: 33px; text: "LINES"; color: root.page == 1 && keys.has-focus ? #33d9d0 : #697b8d; font-size: 14px; }
+    Rectangle { x: root.page == 0 ? 12px : 86px; y: 49px; width: 45px; height: 2px; background: #33d9d0; }
+    if root.page == 0: Rectangle {
+        x: 12px; y: 58px; width: 214px; height: 143px; background: #101d2a; border-radius: 7px;
+        Text { x: 10px; y: 20px; width: 196px; text: root.voltage; color: #54e3dc; font-size: 14px; }
+        Text { x: 10px; y: 60px; width: 196px; text: root.current; color: #f1f7f7; font-size: 14px; }
+        Text { x: 10px; y: 100px; text: root.power; color: #f5cd67; font-size: 14px; }
+    }
+    if root.page == 1: Rectangle {
+        x: 12px; y: 58px; width: 214px; height: 143px; background: #101d2a; border-radius: 7px;
+        Text { x: 10px; y: 10px; text: "CC1"; color: #8ca3b3; font-size: 14px; }
+        Text { x: 105px; y: 10px; text: root.cc1; color: #e6f4f4; font-size: 14px; }
+        Text { x: 10px; y: 39px; text: "CC2"; color: #8ca3b3; font-size: 14px; }
+        Text { x: 105px; y: 39px; text: root.cc2; color: #e6f4f4; font-size: 14px; }
+        Text { x: 10px; y: 68px; text: "D+"; color: #8ca3b3; font-size: 14px; }
+        Text { x: 105px; y: 68px; text: root.dp; color: #e6f4f4; font-size: 14px; }
+        Text { x: 10px; y: 97px; text: "D-"; color: #8ca3b3; font-size: 14px; }
+        Text { x: 105px; y: 97px; text: root.dm; color: #e6f4f4; font-size: 14px; }
+    }
+    Text { x: 12px; y: 211px; text: root.temperature; color: #8ca3b3; font-size: 14px; }
+    Text { x: 114px; y: 211px; width: 114px; horizontal-alignment: right; text: "PD " + root.pd-state; color: #8ca3b3; font-size: 14px; }
+}

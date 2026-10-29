@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 
+extern crate alloc;
+
 use core::{panic::PanicInfo, ptr::write_volatile};
 use cortex_m_rt::{entry, exception};
 use embassy_hc32::pac::interrupt;
@@ -23,6 +25,10 @@ mod rpc;
 
 mod ui;
 mod usb;
+slint::include_modules!();
+
+#[global_allocator]
+static HEAP: embedded_alloc::TlsfHeap = embedded_alloc::TlsfHeap::empty();
 const MARKER: *mut u32 = 0x200f_0fc0 as *mut u32;
 const BOOT_REQUEST: *mut u32 = 0x200f_0ff0 as *mut u32;
 
@@ -102,6 +108,11 @@ async fn enter_loader(status: u32) -> Result<(), &'static str> {
 
 #[entry]
 fn main() -> ! {
+    // Only thread-mode UI uses Slint/alloc. The allocator uses critical
+    // sections, so its effect on PD interrupt latency must be measured.
+    unsafe {
+        embedded_alloc::init!(HEAP, 32 * 1024);
+    }
     retention_log::init();
     let _device = embassy_hc32::pac::Peripherals::take().unwrap();
     unsafe {

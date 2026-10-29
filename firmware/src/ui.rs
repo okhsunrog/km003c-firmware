@@ -1,44 +1,106 @@
-//! Meter screen: large V/A/W values, temperature and calibration state.
-//! Compose changed regions in RAM; input diagnostics stay in logs/retention.
-use core::fmt::Write;
+//! Slint's software renderer owns only a small tile; panel GRAM keeps the frame.
+use alloc::{boxed::Box, rc::Rc};
+use core::{fmt::Write, ops::Range};
 use embassy_hc32::gpio::{InputPin, Port};
 use embedded_graphics::{
-    mono_font::{
-        MonoTextStyle,
-        ascii::{FONT_6X10, FONT_10X20},
-    },
-    pixelcolor::Rgb565,
+    pixelcolor::{Rgb565, raw::RawU16},
     prelude::*,
     primitives::Rectangle,
-    text::Text,
 };
-use km003c_drivers::tile::Tile;
+use slint::{
+    ComponentHandle,
+    platform::{
+        Key, Platform, PlatformError, WindowAdapter, WindowEvent,
+        software_renderer::{
+            LineBufferProvider, MinimalSoftwareWindow, RepaintBufferType, Rgb565Pixel,
+        },
+    },
+};
 
-type UiTile = Tile<{ 216 * 44 }>;
+const WIDTH: usize = 240;
+const TILE_LINES: usize = 8;
 type Value = heapless::String<24>;
 
-// Scale the built-in font in RAM instead of sending separate LCD transactions
-// for glyph pixels. The final 40-pixel-high number is one contiguous upload.
-struct Double<'a>(&'a mut UiTile);
-impl OriginDimensions for Double<'_> {
-    fn size(&self) -> Size {
-        Size::new(self.0.size().width / 2, self.0.size().height / 2)
+struct BoardPlatform(Rc<MinimalSoftwareWindow>);
+impl Platform for BoardPlatform {
+    fn create_window_adapter(&self) -> Result<Rc<dyn WindowAdapter>, PlatformError> {
+        Ok(self.0.clone())
+    }
+    fn duration_since_start(&self) -> core::time::Duration {
+        core::time::Duration::from_micros(embassy_time::Instant::now().as_micros())
     }
 }
-impl DrawTarget for Double<'_> {
-    type Color = Rgb565;
-    type Error = core::convert::Infallible;
-    fn draw_iter<I: IntoIterator<Item = Pixel<Rgb565>>>(
-        &mut self,
-        pixels: I,
-    ) -> Result<(), Self::Error> {
-        for Pixel(p, c) in pixels {
-            self.0.fill_solid(
-                &Rectangle::new(Point::new(p.x * 2, p.y * 2), Size::new(2, 2)),
-                c,
-            )?;
+
+// Batch equal-width adjacent lines into one QSPI transaction. The panel owns
+// the complete image; no full framebuffer or external flash mapping is needed.
+struct Lines<'a> {
+    display: &'a mut crate::display::Display,
+    pixels: [Rgb565; WIDTH * TILE_LINES],
+    line: [Rgb565Pixel; WIDTH],
+    x: usize,
+    y: usize,
+    width: usize,
+    rows: usize,
+}
+impl<'a> Lines<'a> {
+    fn new(display: &'a mut crate::display::Display) -> Self {
+        Self {
+            display,
+            pixels: [Rgb565::BLACK; WIDTH * TILE_LINES],
+            line: [Rgb565Pixel(0); WIDTH],
+            x: 0,
+            y: 0,
+            width: 0,
+            rows: 0,
         }
-        Ok(())
+    }
+    fn flush(&mut self) {
+        if self.rows == 0 {
+            return;
+        }
+        let area = Rectangle::new(
+            Point::new(self.x as i32, self.y as i32),
+            Size::new(self.width as u32, self.rows as u32),
+        );
+        self.display
+            .blit(area, &self.pixels[..self.width * self.rows]);
+        self.rows = 0;
+    }
+}
+impl LineBufferProvider for &mut Lines<'_> {
+    type TargetPixel = Rgb565Pixel;
+    fn process_line(
+        &mut self,
+        line: usize,
+        range: Range<usize>,
+        render: impl FnOnce(&mut [Self::TargetPixel]),
+    ) {
+        if range.is_empty() {
+            return;
+        }
+        let width = range.len();
+        if self.rows != 0
+            && (self.x != range.start
+                || self.width != width
+                || self.y + self.rows != line
+                || self.rows == TILE_LINES)
+        {
+            self.flush();
+        }
+        if self.rows == 0 {
+            self.x = range.start;
+            self.y = line;
+            self.width = width;
+        }
+        render(&mut self.line[..width]);
+        let start = self.rows * width;
+        for (dst, src) in self.pixels[start..start + width]
+            .iter_mut()
+            .zip(&self.line[..width])
+        {
+            *dst = Rgb565::from(RawU16::new(src.0));
+        }
+        self.rows += 1;
     }
 }
 fn label(text: &str) -> Value {
@@ -60,52 +122,13 @@ fn decimal(value: i64, places: u32, unit: &str) -> Value {
     .unwrap();
     out
 }
-fn upload(display: &mut crate::display::Display, tile: &UiTile, origin: Point) {
-    display.blit(Rectangle::new(origin, tile.size()), tile.pixels());
-}
-fn row(
-    display: &mut crate::display::Display,
-    tile: &mut UiTile,
-    cache: &mut Option<Value>,
-    value: &Value,
-    y: i32,
-    color: Rgb565,
-) {
-    if cache.as_ref() == Some(value) {
-        return;
-    }
-    tile.reset(Size::new(216, 44), Rgb565::BLACK);
-    let x = (108 - (value.len() as i32 * 10)).max(0) / 2;
-    Text::new(
-        value,
-        Point::new(x, 16),
-        MonoTextStyle::new(&FONT_10X20, color),
-    )
-    .draw(&mut Double(tile))
-    .unwrap();
-    upload(display, tile, Point::new(12, y));
-    *cache = Some(value.clone());
-}
-
-fn chrome(display: &mut crate::display::Display, tile: &mut UiTile) {
-    tile.reset(Size::new(216, 18), Rgb565::BLACK);
-    Text::new(
-        "KM003C / Rust",
-        Point::new(0, 10),
-        MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE),
-    )
-    .draw(tile)
-    .unwrap();
-    upload(display, tile, Point::new(12, 8));
-    tile.reset(Size::new(216, 10), Rgb565::BLACK);
-    Text::new(
-        "EXIT 2s: loader",
-        Point::new(0, 8),
-        MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE),
-    )
-    .draw(tile)
-    .unwrap();
-    upload(display, tile, Point::new(12, 228));
+fn key(window: &slint::Window, key: Key, down: bool) {
+    let event = if down {
+        WindowEvent::KeyPressed { text: key.into() }
+    } else {
+        WindowEvent::KeyReleased { text: key.into() }
+    };
+    window.dispatch_event(event);
 }
 
 #[embassy_executor::task]
@@ -113,18 +136,18 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
     aw.lcd_reset().await.unwrap();
     aw.backlight(0).await.unwrap();
     let mut display = unsafe { crate::display::Display::new() };
-    {
-        let (id, block) = display.factory_settings();
-        crate::measurement::factory_settings(id, &block);
-    }
+    let (id, block) = display.factory_settings();
+    crate::measurement::factory_settings(id, &block);
     let mut sensor_bus = aw.sensor_bus();
     let mut orientation = crate::orientation::probe(&mut sensor_bus).await;
     let mut rotation = if orientation.is_some() { 3 } else { 0 };
     display.set_rotation(rotation);
     display.init().await;
-    display.clear(Rgb565::BLACK).unwrap();
-    let mut tile = UiTile::new();
-    chrome(&mut display, &mut tile);
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(BoardPlatform(window.clone()))).unwrap();
+    let ui = crate::MeterWindow::new().unwrap();
+    window.set_size(slint::PhysicalSize::new(WIDTH as u32, WIDTH as u32));
+    ui.show().unwrap();
     let buttons = unsafe {
         [
             InputPin::new_pull_up(Port::B, 7),
@@ -133,36 +156,37 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
             InputPin::new_pull_up(Port::B, 9),
         ]
     };
-    let mut counts = [0u32; 4];
+    let keys = [Key::Escape, Key::Return, Key::LeftArrow, Key::RightArrow];
     let (mut previous, mut stable, mut repeats) = (0u8, 0u8, 0u8);
-    let (mut lit, mut held_exit) = (false, 0);
-    let mut caches: [Option<Value>; 5] = core::array::from_fn(|_| None);
-    let mut line_caches: [Option<Value>; 4] = core::array::from_fn(|_| None);
-    let mut lines_due = embassy_time::Instant::now();
-    unsafe {
-        for i in 0..8 {
-            (0x200f0d20 as *mut u32).add(i).write_volatile(0);
-        }
+    let (mut lit, mut held_exit) = (false, 0u16);
+    let mut force_repaint = true;
+    let mut lines = Lines::new(&mut display);
+    macro_rules! set_changed {
+        ($get:ident, $set:ident, $value:expr) => {{
+            let value = $value;
+            if ui.$get().as_str() != value.as_str() {
+                ui.$set(value.as_str().into());
+            }
+        }};
     }
-    log::info!("Meter UI ready; hold EXIT PB7 for loader");
+    log::info!(
+        "Slint meter ready; hold EXIT for loader; heap free {}",
+        crate::HEAP.free()
+    );
     loop {
         if let Some(sensor) = orientation.as_mut() {
             let next = sensor.poll(&mut sensor_bus).await;
             if next != rotation {
                 rotation = next;
-                display.set_rotation(rotation);
-                // Each tile remains contiguous on the bus. Clear/repaint only
-                // when a debounced quarter-turn changes the complete layout.
-                display.clear(Rgb565::BLACK).unwrap();
-                caches.fill(None);
-                line_caches.fill(None);
-                chrome(&mut display, &mut tile);
-                log::info!("Orientation quarter-turn={rotation}");
+                lines.display.set_rotation(rotation);
+                // Repaint every pixel in the new orientation, then return to dirty regions.
+                force_repaint = true;
+                window.request_redraw();
             }
         }
         let mut raw = 0;
-        for (i, b) in buttons.iter().enumerate() {
-            if b.is_low() {
+        for (i, button) in buttons.iter().enumerate() {
+            if button.is_low() {
                 raw |= 1 << i;
             }
         }
@@ -173,21 +197,13 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
             repeats = 0;
         }
         if repeats == 3 && raw != stable {
-            for (i, count) in counts.iter_mut().enumerate() {
-                if raw & (1 << i) != 0 && stable & (1 << i) == 0 {
-                    *count += 1;
+            for (i, &button_key) in keys.iter().enumerate() {
+                let mask = 1 << i;
+                if (raw ^ stable) & mask != 0 {
+                    key(ui.window(), button_key, raw & mask != 0);
                 }
             }
             stable = raw;
-            // Keep the existing diagnostic record for host acceptance, but
-            // dedicate all screen space to actual measurements.
-            log::info!("Buttons mask={stable:02x}; presses={counts:?}");
-            unsafe {
-                (0x200f0d20 as *mut u32).write_volatile(u32::from(stable));
-                for (i, count) in counts.iter().enumerate() {
-                    (0x200f0d24 as *mut u32).add(i).write_volatile(*count);
-                }
-            }
         }
         let values = match crate::measurement::snapshot() {
             crate::measurement::State::Sample(sample) => {
@@ -227,88 +243,53 @@ pub async fn task(aw: crate::aw9523::Aw9523) {
                 label("ERROR"),
             ],
         };
-        row(
-            &mut display,
-            &mut tile,
-            &mut caches[0],
-            &values[0],
-            32,
-            Rgb565::CYAN,
-        );
-        row(
-            &mut display,
-            &mut tile,
-            &mut caches[1],
-            &values[1],
-            81,
-            Rgb565::WHITE,
-        );
-        row(
-            &mut display,
-            &mut tile,
-            &mut caches[2],
-            &values[2],
-            130,
-            Rgb565::YELLOW,
-        );
-        if caches[3].as_ref() != Some(&values[3]) {
-            tile.reset(Size::new(144, 18), Rgb565::BLACK);
-            let mut header = Value::new();
-            write!(header, "RUST {}", values[3]).unwrap();
-            header.push_str("KM003C / Rust").unwrap();
-            Text::new(
-                &header,
-                Point::new(0, 10),
-                MonoTextStyle::new(&FONT_6X10, Rgb565::WHITE),
-            )
-            .draw(&mut tile)
-            .unwrap();
-            upload(&mut display, &tile, Point::new(12, 8));
-            caches[3] = Some(values[3].clone());
-        }
-        if caches[4].as_ref() != Some(&values[4]) {
-            tile.reset(Size::new(64, 18), Rgb565::BLACK);
-            Text::new(
-                &values[4],
-                Point::new(0, 10),
-                MonoTextStyle::new(&FONT_6X10, Rgb565::GREEN),
-            )
-            .draw(&mut tile)
-            .unwrap();
-            upload(&mut display, &tile, Point::new(164, 8));
-            caches[4] = Some(values[4].clone());
-        }
-        if embassy_time::Instant::now() >= lines_due {
-            let sample = crate::lines::snapshot();
-            for (i, name) in ["CC1", "CC2", "D+ ", "D- "].into_iter().enumerate() {
-                let mut text = Value::new();
-                if let Some(s) = sample {
-                    let mv = s.uv[i] / 1000;
-                    write!(text, "{name} {}.{:03}", mv / 1000, mv % 1000).unwrap();
-                } else {
-                    write!(text, "{name} --").unwrap();
-                }
-                if line_caches[i].as_ref() != Some(&text) {
-                    // Four useful measurements in a two-column footer. Each
-                    // changed value is still one contiguous panel transaction.
-                    tile.reset(Size::new(108, 20), Rgb565::BLACK);
-                    Text::new(
-                        &text,
-                        Point::new(0, 16),
-                        MonoTextStyle::new(&FONT_10X20, Rgb565::WHITE),
-                    )
-                    .draw(&mut tile)
-                    .unwrap();
-                    upload(
-                        &mut display,
-                        &tile,
-                        Point::new(12 + (i as i32 % 2) * 108, 181 + (i as i32 / 2) * 22),
-                    );
-                    line_caches[i] = Some(text);
-                }
+        set_changed!(get_voltage, set_voltage, values[0].clone());
+        set_changed!(get_current, set_current, values[1].clone());
+        set_changed!(get_power, set_power, values[2].clone());
+        set_changed!(get_temperature, set_temperature, values[3].clone());
+        set_changed!(get_calibration, set_calibration, values[4].clone());
+        let sample = crate::lines::snapshot();
+        let line_value = |i: usize| {
+            sample
+                .map(|s| decimal(i64::from(s.uv[i] / 1000), 3, "V"))
+                .unwrap_or_else(|| label("--"))
+        };
+        set_changed!(get_cc1, set_cc1, line_value(0));
+        set_changed!(get_cc2, set_cc2, line_value(1));
+        set_changed!(get_dp, set_dp, line_value(2));
+        set_changed!(get_dm, set_dm, line_value(3));
+        let state = crate::pd_service::snapshot();
+        let pd = if state.available {
+            label(match state.state {
+                km003c_interface::PdState::Starting => "START",
+                km003c_interface::PdState::Request => "REQUEST",
+                km003c_interface::PdState::Ready => "READY",
+                km003c_interface::PdState::Detached => "IDLE",
+                km003c_interface::PdState::HardReset => "RESET",
+                km003c_interface::PdState::Default => "DEFAULT",
+                km003c_interface::PdState::Fallback => "FALLBACK",
+                km003c_interface::PdState::Waiting => "WAIT",
+                km003c_interface::PdState::Attached => "ATTACHED",
+                km003c_interface::PdState::Released => "RELEASED",
+                km003c_interface::PdState::Reorienting => "ROTATE",
+                km003c_interface::PdState::Failed => "FAILED",
+            })
+        } else {
+            label("OFF")
+        };
+        set_changed!(get_pd_state, set_pd_state, pd);
+        slint::platform::update_timers_and_animations();
+        window.draw_if_needed(|renderer| {
+            if force_repaint {
+                renderer.set_repaint_buffer_type(RepaintBufferType::NewBuffer);
             }
-            lines_due = embassy_time::Instant::now() + embassy_time::Duration::from_millis(250);
-        }
+            renderer.render_by_line(&mut lines);
+            lines.flush();
+            if force_repaint {
+                renderer.set_repaint_buffer_type(RepaintBufferType::ReusedBuffer);
+                force_repaint = false;
+            }
+        });
         if !lit {
             aw.backlight(30).await.unwrap();
             lit = true;

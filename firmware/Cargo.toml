@@ -5,8 +5,9 @@ edition = "2024"
 
 # PD's software GoodCRC needs cross-crate optimization of the per-edge decoder.
 [profile.release]
-lto = "thin"
+lto = true
 codegen-units = 1
+opt-level = "z"
 
 [dependencies]
 cortex-m = "0.7.10"
@@ -19,14 +20,16 @@ embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413
 embassy-time = { version = "0.5.1", features = ["tick-hz-32_768"] }
 embassy-usb = { version = "0.6.0", features = ["log"] }
 embassy-usb-synopsys-otg = { version = "0.4.0", features = ["log"], git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+embedded-alloc = "0.7.0"
 embedded-graphics = "0.8.2"
 embedded-hal = "1.0.0"
 embedded-hal-async = "1.0.0"
 heapless = "0.9.3"
 km003c-drivers = { version = "0.1.0", path = "../crates/km003c-drivers" }
 km003c-interface = { version = "0.1.0", path = "../crates/km003c-interface" }
-log = { version = "0.4.34", default-features = false }
+log = { version = "0.4.34", default-features = false, features = ["release_max_level_warn"] }
 postcard-rpc = { git = "https://github.com/jamesmunns/postcard-rpc", version = "0.12.1", default-features = false, features = ["embassy-usb-0_6-server"], rev = "2469ebc6" }
+slint = { version = "1.18.1", default-features = false, features = ["unsafe-single-threaded", "libm", "renderer-software", "compat-1-2"] }
 static_cell = "2.1.1"
 uom = { version = "0.36.0", default-features = false, features = ["si", "u32"] }
 usbpd = { version = "2.0.0", features = ["log"] }
@@ -41,3 +44,6 @@ embassy-usb = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d
 embassy-net-driver-channel = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
 embassy-usb-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "c2413d5994bbd8b7e6d5975fd49e6427cb903a02" }
+
+[build-dependencies]
+slint-build = "1.18.1"
