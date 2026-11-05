@@ -7,6 +7,7 @@ pub struct Sample {
     pub uv: [u32; 4],
     pub vdd_uv: u32,
 }
+
 impl Sample {
     /// Reject invalid reference/supply values rather than inventing 3.3 V.
     /// Reference accuracy is inherited from the stock scale, not a calibration
@@ -29,6 +30,7 @@ impl Sample {
             vdd_uv: vdd_uv as u32,
         })
     }
+
     /// Unique plausible active CC. Ambiguous, detached and VCONN-like levels
     /// return None. This is a passive receiver selector, not a Type-C policy.
     pub fn cc_input(&self) -> Option<u8> {
@@ -39,6 +41,7 @@ impl Sample {
             _ => None,
         }
     }
+
     /// Board bench precondition: one detached charger Rp-like level and one
     /// quiet CC input. This is deliberately narrower than a Type-C detector.
     pub fn detached_cc_input(&self) -> Option<u8> {
@@ -56,6 +59,7 @@ impl Sample {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn stock_snapshot_and_common_scale() {
         let s = Sample::from_raw([0, 2052, 742, 0, 1343]).unwrap();
@@ -66,6 +70,7 @@ mod tests {
         let same = Sample::from_raw([1343; 5]).unwrap();
         assert_eq!(same.uv, [1_080_000; 4]);
     }
+
     #[test]
     fn invalid_reference_and_ambiguous_cc() {
         for raw in [[0; 5], [0, 0, 0, 0, 4095], [4096, 0, 0, 0, 1343]] {
@@ -92,6 +97,7 @@ mod tests {
             Some(2)
         );
     }
+
     #[test]
     fn detached_orientation_requires_one_high_and_one_quiet_line() {
         let mut s = Sample::from_raw([0, 0, 0, 0, 1343]).unwrap();

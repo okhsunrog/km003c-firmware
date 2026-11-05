@@ -26,6 +26,7 @@ fn init_retain(index: usize, value: u32) {
         INIT_RETAIN.add(index).write_volatile(value);
     }
 }
+
 pub fn init() {
     // Called before spawning either task, so flash/calibration publication
     // cannot race the measurement task's initialization.
@@ -39,6 +40,7 @@ pub fn init() {
     retain(1, 1);
     init_retain(0, 0x494e4931);
 }
+
 pub fn factory_settings(id: u16, block: &[u8; 96]) {
     retain(21, u32::from(id));
     retain(23, 0x3ff100);
@@ -68,6 +70,7 @@ pub fn factory_settings(id: u16, block: &[u8; 96]) {
         }
     }
 }
+
 pub fn corrected(sample: Sample) -> Option<Measurement> {
     let current = uncalibrated_microamps(sample)?;
     CALIBRATION
@@ -91,10 +94,13 @@ pub enum State {
     Sample(Sample),
     BusError,
 }
+
 static STATE: Mutex<CriticalSectionRawMutex, Cell<State>> = Mutex::new(Cell::new(State::Probing));
+
 pub fn snapshot() -> State {
     STATE.lock(Cell::get)
 }
+
 /// Native 2.0.7 at 0x6d78 returns a signed 24-bit result for ADCRANGE=1,
 /// or four times that value for ADCRANGE=0. Its ADC task passes this directly
 /// to the microamp calibration path at 0x17b1c. Thus each signed 20-bit count
@@ -110,6 +116,7 @@ pub fn uncalibrated_microamps(sample: Sample) -> Option<i32> {
     };
     Some((sample.current_nanoamps(lsb) / 1000) as i32)
 }
+
 fn publish(state: State) {
     STATE.lock(|cell| cell.set(state));
 }
@@ -120,6 +127,7 @@ pub enum SpiError {
     Status(u32),
     Faulted,
 }
+
 impl embedded_hal::spi::Error for SpiError {
     fn kind(&self) -> ErrorKind {
         match self {
@@ -136,6 +144,7 @@ pub struct Spi2Sensor {
     _pins: [AlternatePin; 3],
     faulted: bool,
 }
+
 impl Spi2Sensor {
     /// # Safety
     /// Own SPI2, PA7/8/10 and PB0 exclusively, with PCLK1=96 MHz. No IRQ/DMA
@@ -163,12 +172,15 @@ impl Spi2Sensor {
             }
         }
     }
+
     fn read(offset: usize) -> u32 {
         unsafe { ((BASE + offset) as *const u32).read_volatile() }
     }
+
     fn write(offset: usize, value: u32) {
         unsafe { ((BASE + offset) as *mut u32).write_volatile(value) }
     }
+
     fn wait(mask: u32, expected: u32) -> Result<(), SpiError> {
         for _ in 0..POLLS {
             let status = Self::read(0x14);
@@ -181,6 +193,7 @@ impl Spi2Sensor {
         }
         Err(SpiError::Timeout)
     }
+
     fn byte(value: u8) -> Result<u8, SpiError> {
         Self::wait(TX_EMPTY, TX_EMPTY)?;
         Self::write(0, u32::from(value));
@@ -190,9 +203,11 @@ impl Spi2Sensor {
         Ok(byte)
     }
 }
+
 impl ErrorType for Spi2Sensor {
     type Error = SpiError;
 }
+
 impl SpiDevice<u8> for Spi2Sensor {
     fn transaction(&mut self, operations: &mut [Operation<'_, u8>]) -> Result<(), SpiError> {
         if self.faulted {
@@ -253,6 +268,7 @@ impl SpiDevice<u8> for Spi2Sensor {
         result
     }
 }
+
 impl Drop for Spi2Sensor {
     fn drop(&mut self) {
         Self::write(4, Self::read(4) & !(1 << 6));

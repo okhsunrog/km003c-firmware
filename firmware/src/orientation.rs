@@ -4,6 +4,7 @@ use core::cell::Cell;
 use embassy_sync::blocking_mutex::{Mutex, raw::CriticalSectionRawMutex};
 use embedded_hal_async::i2c::I2c;
 use km003c_drivers::sc7a20::{Filter, Sc7a20};
+
 #[derive(Clone, Copy, Debug)]
 struct State {
     id: u8,
@@ -13,6 +14,7 @@ struct State {
     error: bool,
     count: u32,
 }
+
 static STATE: Mutex<CriticalSectionRawMutex, Cell<State>> = Mutex::new(Cell::new(State {
     id: 0,
     source: 0,
@@ -21,11 +23,13 @@ static STATE: Mutex<CriticalSectionRawMutex, Cell<State>> = Mutex::new(Cell::new
     error: false,
     count: 0,
 }));
+
 pub struct Controller {
     sensor: Sc7a20,
     filter: Filter,
     last: embassy_time::Instant,
 }
+
 pub async fn probe(bus: &mut impl I2c) -> Option<Controller> {
     match Sc7a20::configure(bus).await {
         Ok(sensor) => {
@@ -52,6 +56,7 @@ pub async fn probe(bus: &mut impl I2c) -> Option<Controller> {
         }
     }
 }
+
 impl Controller {
     pub async fn poll(&mut self, bus: &mut impl I2c) -> u8 {
         let mut s = STATE.lock(Cell::get);

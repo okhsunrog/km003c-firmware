@@ -1,19 +1,23 @@
 //! Silan SC7A20 family, WHO_AM_I=0x11. No calibration/NVM/self-test writes.
 //! Bus is borrowed per operation, allowing one board task to share it with GPIO.
 use embedded_hal_async::i2c::I2c;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error<E> {
     Bus(E),
     Identity(u8),
     Configuration,
 }
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Sample {
     pub xyz_mg: [i16; 3],
     pub source: u8,
     pub status: u8,
 }
+
 pub struct Sc7a20;
+
 impl Sc7a20 {
     async fn read<B: I2c>(bus: &mut B, reg: u8) -> Result<u8, Error<B::Error>> {
         let mut b = [0];
@@ -22,6 +26,7 @@ impl Sc7a20 {
             .map_err(Error::Bus)?;
         Ok(b[0])
     }
+
     pub async fn configure<B: I2c>(bus: &mut B) -> Result<Self, Error<B::Error>> {
         let id = Self::read(bus, 0x0f).await?;
         if id != 0x11 {
@@ -55,6 +60,7 @@ impl Sc7a20 {
         }
         Ok(Self)
     }
+
     pub async fn sample<B: I2c>(&mut self, bus: &mut B) -> Result<Sample, Error<B::Error>> {
         let mut bytes = [0; 7];
         // I2C subaddress bit 7 enables auto-increment: STATUS followed by XYZ.
@@ -71,6 +77,7 @@ impl Sc7a20 {
         })
     }
 }
+
 /// The native 1.9.9 table maps XL/XH/YL/YH to these four quarter turns.
 /// Flat, ambiguous or unasserted orientations preserve the previous direction.
 pub fn direction(source: u8) -> Option<u8> {
@@ -85,12 +92,14 @@ pub fn direction(source: u8) -> Option<u8> {
         _ => None,
     }
 }
+
 #[derive(Default)]
 pub struct Filter {
     direction: u8,
     candidate: Option<u8>,
     repeats: u8,
 }
+
 impl Filter {
     /// Require three fresh 10 Hz observations (~300 ms), without allowing an
     /// ambiguous/flat sample to complete an earlier partial transition.
@@ -112,5 +121,6 @@ impl Filter {
         self.direction
     }
 }
+
 #[cfg(test)]
 mod tests;

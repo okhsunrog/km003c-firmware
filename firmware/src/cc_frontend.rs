@@ -8,6 +8,7 @@ use embassy_sync::{
     signal::Signal,
     waitqueue::MultiWakerRegistration,
 };
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     Bus,
@@ -16,6 +17,7 @@ pub enum Error {
     Timeout,
     Superseded,
 }
+
 struct State {
     version: u32,
     applied: u32,
@@ -26,6 +28,7 @@ struct State {
     // release. A single AtomicWaker would lose one of those notifications.
     waiters: MultiWakerRegistration<3>,
 }
+
 static STATE: Mutex<CriticalSectionRawMutex, RefCell<State>> = Mutex::new(RefCell::new(State {
     version: 0,
     applied: u32::MAX,
@@ -35,6 +38,7 @@ static STATE: Mutex<CriticalSectionRawMutex, RefCell<State>> = Mutex::new(RefCel
     waiters: MultiWakerRegistration::new(),
 }));
 static CHANGED: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+
 pub fn request(enabled: bool) -> u32 {
     let version = STATE.lock(|s| {
         let mut s = s.borrow_mut();
@@ -46,6 +50,7 @@ pub fn request(enabled: bool) -> u32 {
     CHANGED.signal(());
     version
 }
+
 pub async fn set(enabled: bool) -> Result<(), Error> {
     let version = request(enabled);
     poll_fn(|cx| {
@@ -63,6 +68,7 @@ pub async fn set(enabled: bool) -> Result<(), Error> {
     })
     .await
 }
+
 #[embassy_executor::task]
 pub async fn task(aw: crate::aw9523::Aw9523) {
     loop {

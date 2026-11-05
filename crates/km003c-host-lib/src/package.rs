@@ -63,9 +63,11 @@ pub fn package(binary: &[u8]) -> Result<Vec<u8>> {
     image.validate_for_update()?;
     Ok(output)
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn package_roundtrip_matches_verified_installed_image() {
         let installed = include_bytes!("../../../hardware/rpc-cleanup/tested-image.bin");
@@ -78,6 +80,7 @@ mod tests {
         raw[..4].fill(0);
         assert!(package(&raw).is_err());
     }
+
     #[test]
     fn invalid_metadata_is_rejected_before_packaging() {
         assert!(package(&[]).is_err());

@@ -3,6 +3,7 @@
 use crate::{pd_buffered::Buffered, pd_service as telemetry, pd_tx};
 use embassy_futures::select::{Either, select};
 use km003c_interface::PdEndReason;
+
 fn report(state: &str, input: u8) {
     telemetry::cc_state(state, input);
 }

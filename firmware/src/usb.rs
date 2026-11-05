@@ -1,6 +1,7 @@
 use embassy_hc32::{intc, pac};
 use embassy_usb_synopsys_otg::{Config, Driver, OtgInstance, PhyType, StateStorage, otg_v1::Otg};
 use pac::interrupt;
+
 static STATE: StateStorage<6> =
     StateStorage::new(embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex::new());
 

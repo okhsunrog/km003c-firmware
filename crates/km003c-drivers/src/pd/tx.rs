@@ -8,6 +8,7 @@ pub struct Periods {
     pub short_reload: u16,
     pub long_reload: u16,
 }
+
 impl Periods {
     pub const NATIVE_207: Self = Self {
         short_reload: 19,
@@ -25,6 +26,7 @@ pub enum Frame<'a> {
     HardReset,
     CableReset,
 }
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     Length,
@@ -84,16 +86,19 @@ pub fn encode(frame: Frame<'_>, periods: Periods, output: &mut [u16]) -> Result<
     if output.len() < count {
         return Err(Error::BufferTooSmall);
     }
+
     struct Writer<'a> {
         output: &'a mut [u16],
         used: usize,
         periods: Periods,
     }
+
     impl Writer<'_> {
         fn push(&mut self, value: u16) {
             self.output[self.used] = value;
             self.used += 1;
         }
+
         fn symbol(&mut self, value: u8) {
             for bit in 0..5 {
                 if value & (1 << bit) != 0 {
@@ -137,6 +142,7 @@ mod tests {
     use super::*;
     use crate::pd::{Decoder, Event};
     use std::vec::Vec;
+
     #[test]
     fn matches_actual_stock_207_encoder_and_decodes() {
         let mut vectors = 0;
@@ -239,6 +245,7 @@ mod tests {
         }
         assert_eq!(vectors, 162);
     }
+
     #[test]
     fn errors_do_not_expose_partial_waveform() {
         let mut out = [0xa55a; 8];

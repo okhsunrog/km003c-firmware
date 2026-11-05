@@ -10,21 +10,27 @@ use embassy_hc32::{
 const TMRA: usize = 0x40015400;
 const CMP: usize = 0x4004a000;
 const DCU: usize = 0x40052000;
+
 pub(crate) fn read8(address: usize) -> u8 {
     unsafe { (address as *const u8).read_volatile() }
 }
+
 pub(crate) fn write8(address: usize, value: u8) {
     unsafe { (address as *mut u8).write_volatile(value) }
 }
+
 pub(crate) fn read16(address: usize) -> u16 {
     unsafe { (address as *const u16).read_volatile() }
 }
+
 pub(crate) fn write16(address: usize, value: u16) {
     unsafe { (address as *mut u16).write_volatile(value) }
 }
+
 fn read32(address: usize) -> u32 {
     unsafe { (address as *const u32).read_volatile() }
 }
+
 fn write32(address: usize, value: u32) {
     unsafe { (address as *mut u32).write_volatile(value) }
 }
@@ -35,6 +41,7 @@ pub enum Input {
     Cmp1Inp1,
     Cmp1Inp2,
 }
+
 impl Input {
     pub fn number(self) -> u8 {
         match self {
@@ -43,11 +50,13 @@ impl Input {
         }
     }
 }
+
 #[derive(Debug)]
 pub enum Error {
     Dma(dma::Error),
     Routing(embassy_hc32::intc::IrqError),
 }
+
 pub(crate) fn stop_events() {
     // Disable edge events and the physical VCOUT port, retain internal comparator
     // output only. Then stop the timer and disable/clear overflow IRQ state.
@@ -55,20 +64,24 @@ pub(crate) fn stop_events() {
     write16(TMRA + 0x80, read16(TMRA + 0x80) & !1);
     write8(TMRA + 0x81, read8(TMRA + 0x81) & !0x50);
 }
+
 #[interrupt]
 fn INT008() {
     if !crate::pd_tx::on_interrupt(0) {
         crate::pd_buffered::on_interrupt(0);
     }
 }
+
 #[interrupt]
 fn INT016() {
     crate::pd_tx::on_interrupt(1);
 }
+
 #[interrupt]
 fn INT017() {
     crate::pd_buffered::on_interrupt(1);
 }
+
 #[interrupt]
 fn INT018() {
     if !crate::pd_tx::on_interrupt(2) {
@@ -80,6 +93,7 @@ pub struct Receiver {
     _channel: Channel,
     _routes: [Route; 4],
 }
+
 impl Receiver {
     /// Switch only the internal comparator mux between captures. Event/output
     /// drivers stay disabled; this does not change termination or any GPIO.
@@ -158,6 +172,7 @@ impl Receiver {
         })
     }
 }
+
 impl Drop for Receiver {
     fn drop(&mut self) {
         stop_events();

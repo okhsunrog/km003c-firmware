@@ -14,14 +14,18 @@ use embassy_sync::{
     waitqueue::AtomicWaker,
 };
 use km003c_drivers::pd_pool::Pool;
+
 const N: usize = 860;
+
 struct Buffers(UnsafeCell<[[u16; N]; 2]>);
+
 // All access follows Pool ownership under STATE's critical section. DMA writes
 // FILLING only; immutable slices are created only for an acquired READING slot.
 unsafe impl Sync for Buffers {}
 static BUFFERS: Buffers = Buffers(UnsafeCell::new([[0; N]; 2]));
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static WAKER: AtomicWaker = AtomicWaker::new();
+
 #[derive(Clone, Copy, Default)]
 pub struct Meta {
     pub input: u8,
@@ -31,6 +35,7 @@ pub struct Meta {
     pub end_us: u64,
     pub end_cycles: u32,
 }
+
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Stats {
     pub input_switches: u32,
@@ -45,6 +50,7 @@ pub struct Stats {
     pub stop_faults: u32,
     pub max_handler_cycles: u32,
 }
+
 #[derive(Default)]
 struct State {
     input: u8,
@@ -53,14 +59,18 @@ struct State {
     stats: Stats,
     running: bool,
 }
+
 static STATE: Mutex<CriticalSectionRawMutex, RefCell<Option<State>>> =
     Mutex::new(RefCell::new(None));
+
 fn r(a: usize) -> u32 {
     unsafe { (a as *const u32).read_volatile() }
 }
+
 fn w(a: usize, v: u32) {
     unsafe { (a as *mut u32).write_volatile(v) }
 }
+
 fn stop_dma() -> bool {
     w(0x4005301c, r(0x4005301c) & !4);
     fence(Ordering::SeqCst);
@@ -73,6 +83,7 @@ fn stop_dma() -> bool {
     }
     false
 }
+
 fn arm(slot: usize) {
     w(0x40053014, 4 | (4 << 16));
     w(0x40053018, 4 | (4 << 16));
@@ -104,6 +115,7 @@ pub fn resume_after_tx() {
         }
     });
 }
+
 /// Timer overflow, DMA completion or DMA fault dispatch from their own IRQs.
 /// This disables producers, settles DMA, validates length, changes ownership and
 /// rearms before waking the decoder. It never formats text, copies or decodes.
@@ -186,21 +198,26 @@ pub fn on_interrupt(kind: u8) {
         WAKER.wake();
     }
 }
+
 pub struct Buffered {
     receiver: Receiver,
 }
+
 impl Buffered {
     pub fn new(receiver: Receiver) -> Self {
         Self { receiver }
     }
+
     pub fn start(&mut self, input: Input) -> bool {
         self.restart(input, true)
     }
+
     /// Reselect a passive input without resetting cumulative loss counters.
     /// Any old queued/partial burst is discarded explicitly, never mislabeled.
     pub fn switch_input(&mut self, input: Input) -> bool {
         self.restart(input, false)
     }
+
     fn restart(&mut self, input: Input, reset_stats: bool) -> bool {
         if !self.stop() {
             return false;
@@ -231,6 +248,7 @@ impl Buffered {
         });
         true
     }
+
     pub fn stop(&mut self) -> bool {
         STATE.lock(|cell| {
             pd_capture::stop_events();
@@ -248,9 +266,11 @@ impl Buffered {
             quiet
         })
     }
+
     pub fn stats(&self) -> Stats {
         STATE.lock(|c| c.borrow().as_ref().map(|s| s.stats).unwrap_or_default())
     }
+
     pub async fn wait_ready(&self) {
         poll_fn(|cx| {
             WAKER.register(cx.waker());
@@ -267,6 +287,7 @@ impl Buffered {
         })
         .await
     }
+
     pub fn frame(&mut self) -> Option<Frame<'_>> {
         STATE.lock(|c| {
             let mut state = c.borrow_mut();
@@ -280,21 +301,25 @@ impl Buffered {
             })
         })
     }
+
     pub fn faulted(&self) -> bool {
         STATE.lock(|c| c.borrow().as_ref().is_some_and(|s| !s.running))
     }
 }
+
 impl Drop for Buffered {
     fn drop(&mut self) {
         self.stop();
         ENABLED.store(false, Ordering::Release);
     }
 }
+
 pub struct Frame<'a> {
     slot: usize,
     pub meta: Meta,
     _owner: PhantomData<&'a mut Buffered>,
 }
+
 impl Frame<'_> {
     pub fn samples(&self) -> &[u16] {
         // DMA cannot select a READING slot. The borrow of Buffered prevents stop/start
@@ -307,6 +332,7 @@ impl Frame<'_> {
         }
     }
 }
+
 impl Drop for Frame<'_> {
     fn drop(&mut self) {
         STATE.lock(|c| {

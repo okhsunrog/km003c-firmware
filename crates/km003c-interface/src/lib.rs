@@ -11,6 +11,7 @@ pub struct Status {
     pub uptime_ms: u64,
     pub hclk_hz: u32,
 }
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Schema)]
 pub struct Measurement {
     pub uptime_ms: u64,
@@ -22,6 +23,7 @@ pub struct Measurement {
     /// CC1, CC2, D+, D-. None means no valid ADC snapshot.
     pub lines_uv: Option<[u32; 4]>,
 }
+
 pub type LoaderResult = Result<(), ()>;
 postcard_rpc::endpoints! {
     list = ENDPOINTS;
@@ -60,14 +62,17 @@ pub enum PdControl {
         seconds: u16,
     },
 }
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Schema)]
 pub enum ControlError {
     Invalid,
     Busy,
     Unavailable,
 }
+
 /// Accepted command ID; terminal events carry this ID.
 pub type ControlResult = Result<u32, ControlError>;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Schema)]
 pub enum PdEvent {
     Stats {
@@ -94,6 +99,7 @@ pub enum PdEvent {
         value: u32,
     },
 }
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub enum PdState {
     Starting,
@@ -124,12 +130,14 @@ pub enum PdEndReason {
     MonitorError,
     InitializationError,
 }
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct PdCompletion {
     pub command_id: u32,
     pub reason: PdEndReason,
     pub released: bool,
 }
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Schema)]
 pub struct PdSnapshot {
     pub available: bool,

@@ -9,13 +9,16 @@ use core::{
     ptr::{read_volatile as read, write_volatile as write},
 };
 use embedded_graphics::{pixelcolor::Rgb565, prelude::*, primitives::Rectangle};
+
 const CR: *mut u32 = 0x9c000000 as *mut u32;
 const FCR: *mut u32 = 0x9c000008 as *mut u32;
 const SR: *const u32 = 0x9c00000c as *const u32;
 const DATA: *mut u32 = 0x9c000010 as *mut u32;
+
 pub struct Display {
     rotation: km003c_drivers::rotation::Rotation,
 }
+
 impl Display {
     /// Read the native settings-A copy without any write-enable, program or
     /// erase command. Call before panel init while this owner has the entire
@@ -41,6 +44,7 @@ impl Display {
         self.flash_read(&[0x03, 0x3f, 0xf1, 0x00], &mut block);
         (u16::from_be_bytes(id), block)
     }
+
     fn flash_read(&mut self, command: &[u8], response: &mut [u8]) {
         Self::idle();
         unsafe {
@@ -59,6 +63,7 @@ impl Display {
             write(CR, read(CR) & !0x20);
         }
     }
+
     /// Configure the shared controller without issuing any external-flash command.
     ///
     /// # Safety
@@ -85,9 +90,11 @@ impl Display {
             rotation: km003c_drivers::rotation::Rotation::default(),
         }
     }
+
     pub fn set_rotation(&mut self, turns: u8) {
         self.rotation = km003c_drivers::rotation::Rotation::new(turns);
     }
+
     fn idle() {
         for _ in 0..2_000_000 {
             if unsafe { read(SR) } & 1 == 0 {
@@ -96,6 +103,7 @@ impl Display {
         }
         panic!("QSPI busy timeout");
     }
+
     // Keep the flash deselected before changing the controller or lowering LCD
     // CS. The PIDRB check deliberately fails closed if pin muxing is wrong.
     fn begin(&mut self) -> u32 {
@@ -111,6 +119,7 @@ impl Display {
             saved
         }
     }
+
     fn end(&mut self, saved: u32) {
         Self::idle();
         unsafe {
@@ -122,6 +131,7 @@ impl Display {
             write(CR, saved);
         }
     }
+
     // WP is reused as D/C: low for an opcode, high for parameters/pixels.
     // Wait for the previous byte to leave the bus before changing its level.
     fn phase(data: bool) {
@@ -130,11 +140,13 @@ impl Display {
             write(FCR, (read(FCR) & !0x40) | if data { 0x40 } else { 0 });
         }
     }
+
     fn byte(byte: u8) {
         unsafe {
             write(DATA, u32::from(byte));
         }
     }
+
     pub fn command(&mut self, command: u8, data: &[u8]) {
         let saved = self.begin();
         Self::phase(false);
@@ -145,6 +157,7 @@ impl Display {
         }
         self.end(saved);
     }
+
     pub async fn init(&mut self) {
         // Sleep-out needs a real delay. Gamma/power parameters and MADCTL 0x60
         // are copied from the native panel init, rather than a generic module.
@@ -174,6 +187,7 @@ impl Display {
         }
         embassy_time::Timer::after_millis(20).await;
     }
+
     fn start_pixels(&mut self, area: Rectangle) -> u32 {
         // Callers supply a nonempty rectangle wholly within the panel.
         // CASET/RASET use inclusive, big-endian endpoints.
@@ -196,6 +210,7 @@ impl Display {
         Self::phase(true);
         saved
     }
+
     fn rectangle(&mut self, area: Rectangle, color: Rgb565) {
         // Clip before casting signed coordinates; negative points cannot wrap.
         let clipped = area.intersection(&self.bounding_box());
@@ -211,6 +226,7 @@ impl Display {
         }
         self.end(saved);
     }
+
     /// Stream a precomposed, tightly packed dirty rectangle in one transaction.
     /// This avoids per-glyph-pixel address/mux commands and visible erase/draw
     /// phases. It is not VSYNC/TE synchronization: the LCD still scans live GRAM.
@@ -234,14 +250,17 @@ impl Display {
         self.end(saved);
     }
 }
+
 impl OriginDimensions for Display {
     fn size(&self) -> Size {
         Size::new(240, 240)
     }
 }
+
 impl DrawTarget for Display {
     type Color = Rgb565;
     type Error = Infallible;
+
     fn draw_iter<I: IntoIterator<Item = Pixel<Rgb565>>>(
         &mut self,
         pixels: I,
@@ -251,6 +270,7 @@ impl DrawTarget for Display {
         }
         Ok(())
     }
+
     // A full rectangle is one bus transaction, avoiding a framebuffer and the
     // command/mux overhead of setting an address window for every pixel.
     fn fill_solid(&mut self, area: &Rectangle, color: Rgb565) -> Result<(), Infallible> {

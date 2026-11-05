@@ -41,10 +41,12 @@ pub struct Packet {
     pub len: u8,
     pub crc: u32,
 }
+
 impl Packet {
     pub fn header(&self) -> u16 {
         u16::from_le_bytes([self.bytes[0], self.bytes[1]])
     }
+
     pub fn wire(&self) -> &[u8] {
         &self.bytes[..usize::from(self.len)]
     }
@@ -85,6 +87,7 @@ const CRC_TABLE: [u32; 256] = {
     }
     table
 };
+
 // One call per packet: avoid bitwise CRC register pressure in the per-bit loop.
 #[inline(never)]
 pub fn crc32(bytes: &[u8]) -> u32 {
@@ -109,6 +112,7 @@ pub struct Decoder {
     used: usize,
     expected: usize,
 }
+
 impl Decoder {
     pub fn new(half_bit_ticks: u16, tolerance: u16) -> Option<Self> {
         // Keep short/long windows disjoint, and all arithmetic representable.
@@ -130,10 +134,12 @@ impl Decoder {
             expected: 0,
         })
     }
+
     /// Whether a SOP has been recognized and a packet is being assembled.
     pub fn in_packet(&self) -> bool {
         self.sop.is_some()
     }
+
     pub fn reset(&mut self) {
         self.pending_half = false;
         self.window = 0;
@@ -145,6 +151,7 @@ impl Decoder {
         self.used = 0;
         self.expected = 0;
     }
+
     /// Packet-gap/overrun notification. Do not join two DMA buffers across lost
     /// edges. A missing EOP or incomplete symbol is reported, then state clears.
     pub fn finish(&mut self) -> Result<(), Error> {
@@ -156,6 +163,7 @@ impl Decoder {
             Ok(())
         }
     }
+
     #[inline(always)]
     pub fn push_interval(&mut self, ticks: u16) -> Result<Option<Event>, Error> {
         let n = u32::from(ticks);
@@ -178,6 +186,7 @@ impl Decoder {
         }
         result
     }
+
     // Keep the common per-bit path inside the caller. Otherwise the rare EOP
     // CRC/copy branch forces a large saved-register/stack frame on EVERY bit.
     #[inline(always)]
@@ -251,6 +260,7 @@ impl Decoder {
         }
         Ok(None)
     }
+
     // Inline the state access so LLVM can keep flags/counters in registers
     // through the burst; only crc32 receives a byte slice at the packet end.
     #[inline(always)]

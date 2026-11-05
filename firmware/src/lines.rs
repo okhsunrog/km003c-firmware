@@ -16,14 +16,17 @@ static LATEST: Mutex<CriticalSectionRawMutex, Cell<Option<Sample>>> = Mutex::new
 static INPUT: AtomicU8 = AtomicU8::new(0);
 static DETACHED_INPUT: AtomicU8 = AtomicU8::new(0);
 static UPDATED: AtomicU32 = AtomicU32::new(0);
+
 pub fn fresh() -> Option<Sample> {
     let age = (embassy_time::Instant::now().as_millis() as u32)
         .wrapping_sub(UPDATED.load(Ordering::Acquire));
     (age < 100).then(snapshot).flatten()
 }
+
 pub fn snapshot() -> Option<Sample> {
     LATEST.lock(Cell::get)
 }
+
 pub fn cc_input() -> Option<u8> {
     match INPUT.load(Ordering::Relaxed) {
         1 => Some(1),

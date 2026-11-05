@@ -2,6 +2,7 @@
 //! bit/symbol state in local variables and produces a Packet only once, at EOP.
 //! After SOP, damaged data rejects the burst; resynchronization is next burst.
 use super::{DATA_SYMBOLS, Decoder, Error, Event, ORDERED, Packet, Sop, crc32};
+
 const WORDS: [u32; 7] = {
     let mut out = [0; 7];
     let mut i = 0;
@@ -24,6 +25,7 @@ const NIBBLES: [u8; 32] = {
     }
     out
 };
+
 #[inline(always)]
 fn bit(
     it: &mut core::slice::Iter<'_, u16>,
@@ -46,12 +48,14 @@ fn bit(
     }
     Ok(None)
 }
+
 /// Intervals exclude the capture's unknown first-edge duration. CRC is required
 /// before delivering any packet; pre-SOP noise can reset the ordered-set search.
 #[inline(always)]
 pub fn decode(intervals: &[u16], half: u16, tol: u16) -> Result<Option<Event>, Error> {
     decode_observed(intervals, half, tol, |_| {})
 }
+
 /// Boundaries for an optional board-owned profiler; no hardware clock is used
 /// by the decoder itself. The normal decode entry point eliminates the hook.
 #[derive(Clone, Copy)]
@@ -61,6 +65,7 @@ pub enum Phase {
     Crc,
     Assemble,
 }
+
 /// Decode with four phase markers, typically sampled with a CPU cycle counter.
 #[inline(always)]
 pub fn decode_observed(
@@ -71,6 +76,7 @@ pub fn decode_observed(
 ) -> Result<Option<Event>, Error> {
     decode_configured::<false>(intervals, half, tol, mark)
 }
+
 /// A/B benchmark entry: identical decoder with an optional ordered-set filter.
 #[inline(always)]
 pub fn decode_configured<const FILTER: bool>(

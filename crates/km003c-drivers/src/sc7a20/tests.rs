@@ -6,14 +6,17 @@ use std::{
     task::{Context, Poll, Waker},
     vec::Vec,
 };
+
 struct Bus {
     id: u8,
     regs: [u8; 64],
     writes: Vec<(u8, u8)>,
 }
+
 impl embedded_hal::i2c::ErrorType for Bus {
     type Error = core::convert::Infallible;
 }
+
 impl I2c for Bus {
     async fn transaction(
         &mut self,
@@ -43,6 +46,7 @@ impl I2c for Bus {
         Ok(())
     }
 }
+
 fn run<F: Future>(f: F) -> F::Output {
     match pin!(f)
         .as_mut()
@@ -52,6 +56,7 @@ fn run<F: Future>(f: F) -> F::Output {
         Poll::Pending => panic!("fake I2C must be immediate"),
     }
 }
+
 #[test]
 fn gated_configuration_and_signed_burst() {
     let mut bus = Bus {
@@ -79,6 +84,7 @@ fn gated_configuration_and_signed_burst() {
         }
     );
 }
+
 #[test]
 fn native_directions_and_debounce() {
     assert_eq!(

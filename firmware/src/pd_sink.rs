@@ -13,12 +13,15 @@ use usbpd::{
     units::{ElectricCurrent, ElectricPotential},
 };
 use usbpd_traits::{Driver, DriverRxError, DriverTxError};
+
 static RX_END: AtomicU32 = AtomicU32::new(0);
 static DECODE_CYCLES: AtomicU32 = AtomicU32::new(0);
 static PHASE_CYCLES: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+
 pub fn phases() -> [u32; 4] {
     core::array::from_fn(|i| PHASE_CYCLES[i].load(Ordering::Relaxed))
 }
+
 pub fn timing() -> (u32, u32) {
     (
         pd_tx::start_cycles().wrapping_sub(RX_END.load(Ordering::Relaxed)),
@@ -29,6 +32,7 @@ pub fn timing() -> (u32, u32) {
 struct Phy<'a> {
     rx: &'a mut Buffered,
 }
+
 /// Copy the CPU-only hot loop into zero-wait SRAMH. DMA storage and application
 /// data stay in their existing SRAM12 region; no loader/retention RAM is used.
 pub fn init() {
@@ -45,6 +49,7 @@ pub fn init() {
     cortex_m::asm::dsb();
     cortex_m::asm::isb();
 }
+
 // SRAMH is the fast code bank also used by native RAM routines. Ordinary SRAM
 // has CPU wait states and shares instruction/data traffic, so it was slower.
 #[unsafe(link_section = ".pd_fast")]
@@ -59,9 +64,11 @@ fn decode(data: &[u16]) -> Option<Event> {
     }
     result.ok().flatten()
 }
+
 impl Driver for Phy<'_> {
     const HAS_AUTO_GOOD_CRC: bool = false;
     const HAS_AUTO_RETRY: bool = false;
+
     async fn wait_for_vbus(&mut self) {
         loop {
             if let crate::measurement::State::Sample(s) = crate::measurement::snapshot()
@@ -72,6 +79,7 @@ impl Driver for Phy<'_> {
             embassy_time::Timer::after_millis(5).await;
         }
     }
+
     async fn receive(&mut self, bytes: &mut [u8]) -> Result<usize, DriverRxError> {
         loop {
             let Some(frame) = self.rx.frame() else {
@@ -113,6 +121,7 @@ impl Driver for Phy<'_> {
             }
         }
     }
+
     async fn transmit(&mut self, data: &[u8]) -> Result<(), DriverTxError> {
         let result = pd_tx::transmit(
             self.rx,
@@ -135,6 +144,7 @@ impl Driver for Phy<'_> {
         telemetry::sink_tx(data);
         Ok(())
     }
+
     async fn transmit_hard_reset(&mut self) -> Result<(), DriverTxError> {
         if pd_tx::transmit(self.rx, Frame::HardReset).await.is_err() {
             embassy_time::Timer::after_millis(1).await;
@@ -148,7 +158,9 @@ impl Driver for Phy<'_> {
         Ok(())
     }
 }
+
 struct Clock;
+
 impl usbpd::timers::Timer for Clock {
     async fn after_millis(milliseconds: u64) {
         // now() is rounded down to 1/32768 s. One extra tick prevents an
@@ -160,9 +172,11 @@ impl usbpd::timers::Timer for Clock {
         .await;
     }
 }
+
 struct Policy {
     target_mv: u32,
 }
+
 impl DevicePolicyManager for Policy {
     async fn request(&mut self, caps: &SourceCapabilities) -> PowerSource {
         let request = PowerSource::new_fixed(
@@ -187,14 +201,17 @@ impl DevicePolicyManager for Policy {
             }
         }
     }
+
     async fn transition_power(&mut self, _: &PowerSource) {
         // Called by usbpd after Accept + PS_RDY, not merely after sending RDO.
         telemetry::sink_status("contract_ready", self.target_mv);
     }
+
     async fn hard_reset(&mut self) {
         telemetry::sink_status("transition_default", 5000);
     }
 }
+
 pub async fn run(rx: &mut Buffered, volts: u16) -> Result<(), ()> {
     let mut sink = Sink::<_, Clock, _>::new(
         Phy { rx },

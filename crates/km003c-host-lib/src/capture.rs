@@ -13,6 +13,7 @@ use std::{
     time::Duration,
 };
 use tokio::time::Instant;
+
 #[derive(Serialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum Record<'a> {
@@ -26,10 +27,12 @@ pub enum Record<'a> {
     Error(String),
     Finished,
 }
+
 struct Recorder {
     writer: Box<dyn Write + Send>,
     start: Instant,
 }
+
 impl Recorder {
     fn new(path: Option<&Path>) -> Result<Self> {
         let writer: Box<dyn Write + Send> = if let Some(path) = path {
@@ -47,6 +50,7 @@ impl Recorder {
             start: Instant::now(),
         })
     }
+
     fn emit(&mut self, event: Record<'_>) -> Result<()> {
         serde_json::to_writer(
             &mut self.writer,
@@ -57,6 +61,7 @@ impl Recorder {
         Ok(())
     }
 }
+
 pub async fn run(client: &Client, plan: &Maneuver, output: Option<&Path>) -> Result<()> {
     plan.validate()?;
     let mut recorder = Recorder::new(output)?;
@@ -163,10 +168,12 @@ fn confirmed_detach(status: &km003c_interface::PdSnapshot, id: u32) -> Option<bo
         .filter(|result| result.command_id == id)
         .map(|result| result.released)
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use km003c_interface::{PdCompletion, PdEndReason, PdSnapshot};
+
     #[test]
     fn snapshot_confirms_only_matching_command_without_an_event() {
         let mut s = PdSnapshot {

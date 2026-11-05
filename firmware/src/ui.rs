@@ -20,14 +20,17 @@ type Value = heapless::String<24>;
 // Scale the built-in font in RAM instead of sending separate LCD transactions
 // for glyph pixels. The final 40-pixel-high number is one contiguous upload.
 struct Double<'a>(&'a mut UiTile);
+
 impl OriginDimensions for Double<'_> {
     fn size(&self) -> Size {
         Size::new(self.0.size().width / 2, self.0.size().height / 2)
     }
 }
+
 impl DrawTarget for Double<'_> {
     type Color = Rgb565;
     type Error = core::convert::Infallible;
+
     fn draw_iter<I: IntoIterator<Item = Pixel<Rgb565>>>(
         &mut self,
         pixels: I,
@@ -41,9 +44,11 @@ impl DrawTarget for Double<'_> {
         Ok(())
     }
 }
+
 fn label(text: &str) -> Value {
     Value::try_from(text).unwrap()
 }
+
 fn decimal(value: i64, places: u32, unit: &str) -> Value {
     let mut out = Value::new();
     let divisor = 10u64.pow(places);
@@ -60,9 +65,11 @@ fn decimal(value: i64, places: u32, unit: &str) -> Value {
     .unwrap();
     out
 }
+
 fn upload(display: &mut crate::display::Display, tile: &UiTile, origin: Point) {
     display.blit(Rectangle::new(origin, tile.size()), tile.pixels());
 }
+
 fn row(
     display: &mut crate::display::Display,
     tile: &mut UiTile,

@@ -10,6 +10,7 @@ use km003c_host_lib::{
     rpc::Client,
 };
 use std::path::PathBuf;
+
 #[derive(Parser)]
 #[command(
     name = "km003c",
@@ -22,6 +23,7 @@ struct Args {
     #[command(subcommand)]
     command: Command,
 }
+
 #[derive(Subcommand)]
 enum Command {
     Status,
@@ -81,6 +83,7 @@ enum Command {
         output: PathBuf,
     },
 }
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -176,6 +179,7 @@ async fn main() -> Result<()> {
     }
     Ok(())
 }
+
 fn plan(seconds: u64, commands: Vec<PdControl>) -> Result<Maneuver> {
     ensure!(
         (1..=600).contains(&seconds),
@@ -190,6 +194,7 @@ fn plan(seconds: u64, commands: Vec<PdControl>) -> Result<Maneuver> {
             .collect(),
     })
 }
+
 fn serde_json_from_path(path: &std::path::Path) -> Result<Maneuver> {
     km003c_host_lib::maneuver::load(path)
 }

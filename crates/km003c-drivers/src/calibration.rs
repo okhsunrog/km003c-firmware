@@ -11,17 +11,20 @@ pub enum Error {
     Uncalibrated,
     Coefficient,
 }
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Calibration {
     voltage_offsets: [i32; 5],
     current_gains: [i32; 10],
     current_offset: i32,
 }
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Measurement {
     pub voltage_microvolts: u32,
     pub current_microamps: i32,
 }
+
 impl Calibration {
     pub fn from_settings(block: &[u8]) -> Result<Self, Error> {
         if block.len() != 96 {
@@ -60,6 +63,7 @@ impl Calibration {
         }
         Ok(calibration)
     }
+
     pub fn correct(self, voltage_microvolts: u32, current_microamps: i32) -> Option<Measurement> {
         let offsets = self.voltage_offsets;
         let offset = if offsets[0] == offsets[1..].iter().sum() {

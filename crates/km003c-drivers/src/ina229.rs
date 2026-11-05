@@ -9,6 +9,7 @@ pub struct Identity {
     pub manufacturer: u16,
     pub device: u16,
 }
+
 impl Identity {
     pub fn is_ina229(self) -> bool {
         self.manufacturer == 0x5449 && self.device >> 4 == 0x229
@@ -30,6 +31,7 @@ pub struct Configuration {
     pub shunt_cal: u16,
     pub shunt_tempco: u16,
 }
+
 impl Configuration {
     /// Recovered from native init 0x6f9a in both preserved 1.9.9 images.
     /// This calibration value alone does not establish CURRENT_LSB.
@@ -39,6 +41,7 @@ impl Configuration {
         shunt_cal: 0x1062,
         shunt_tempco: 0x001e,
     };
+
     pub fn valid(self) -> bool {
         // Exclude reset/accumulator reset and reserved bits. SHUNT_CAL=0
         // cannot provide useful current results. No undocumented writes.
@@ -60,11 +63,13 @@ pub struct Sample {
     /// Reading DIAG_ALRT clears some latched flags, including conversion-ready.
     pub diagnostic: u16,
 }
+
 impl Sample {
     /// 195.3125 µV/count, expressed in nanovolts without floating point.
     pub fn bus_nanovolts(self) -> u64 {
         u64::from(self.bus_counts) * 390625 / 2
     }
+
     /// 312.5 or 78.125 nV/count according to the *read* CONFIG.ADCRANGE bit.
     pub fn shunt_picovolts(self) -> i64 {
         i64::from(self.shunt_counts)
@@ -74,12 +79,15 @@ impl Sample {
                 78125
             }
     }
+
     pub fn temperature_millicelsius(self) -> i32 {
         i32::from(self.temperature_counts) * 125 / 16
     }
+
     pub fn math_overflow(self) -> bool {
         self.diagnostic & (1 << 9) != 0
     }
+
     /// The caller supplies CURRENT_LSB for the programmed SHUNT_CAL, range and
     /// physical shunt. The register value alone cannot determine this scale.
     pub fn current_nanoamps(self, current_lsb_nanoamps: u32) -> i64 {
@@ -90,14 +98,17 @@ impl Sample {
 pub struct Ina229<S> {
     spi: S,
 }
+
 impl<S: SpiDevice<u8>> Ina229<S> {
     /// Construction itself performs no I/O or writes to the sensor.
     pub fn new(spi: S) -> Self {
         Self { spi }
     }
+
     pub fn release(self) -> S {
         self.spi
     }
+
     fn read<const N: usize>(&mut self, register: u8) -> Result<[u8; N], Error<S::Error>> {
         let mut data = [0; N];
         // One transaction holds CS low across address and MSB-first response.
@@ -109,23 +120,28 @@ impl<S: SpiDevice<u8>> Ina229<S> {
             .map_err(Error::Bus)?;
         Ok(data)
     }
+
     fn read16(&mut self, register: u8) -> Result<u16, Error<S::Error>> {
         Ok(u16::from_be_bytes(self.read(register)?))
     }
+
     fn read24(&mut self, register: u8) -> Result<u32, Error<S::Error>> {
         let [a, b, c] = self.read(register)?;
         Ok(u32::from_be_bytes([0, a, b, c]))
     }
+
     fn write16(&mut self, register: u8, value: u16) -> Result<(), Error<S::Error>> {
         let [a, b] = value.to_be_bytes();
         self.spi.write(&[register << 2, a, b]).map_err(Error::Bus)
     }
+
     pub fn identity(&mut self) -> Result<Identity, Error<S::Error>> {
         Ok(Identity {
             manufacturer: self.read16(0x3e)?,
             device: self.read16(0x3f)?,
         })
     }
+
     /// Reset the monitor to its documented power-on register defaults. The
     /// caller must wait for reset completion before issuing further commands.
     pub fn reset(&mut self) -> Result<(), Error<S::Error>> {
@@ -135,6 +151,7 @@ impl<S: SpiDevice<u8>> Ina229<S> {
         }
         self.write16(0, 0x8000)
     }
+
     pub fn configuration(&mut self) -> Result<Configuration, Error<S::Error>> {
         Ok(Configuration {
             config: self.read16(0)?,
@@ -143,6 +160,7 @@ impl<S: SpiDevice<u8>> Ina229<S> {
             shunt_tempco: self.read16(3)?,
         })
     }
+
     /// A mismatched/floating SPI bus must never receive configuration writes.
     /// Writes are sequential, not atomic; on error re-probe and inspect state.
     pub fn configure(&mut self, config: Configuration) -> Result<(), Error<S::Error>> {
@@ -159,6 +177,7 @@ impl<S: SpiDevice<u8>> Ina229<S> {
         // Conversion mode last, after range and calibration.
         self.write16(1, config.adc_config)
     }
+
     /// Separate reads are not an atomic ADC snapshot. A conversion can finish
     /// between transactions in continuous mode; flag freshness is advisory.
     pub fn sample(&mut self) -> Result<Sample, Error<S::Error>> {

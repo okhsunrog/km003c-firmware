@@ -12,25 +12,33 @@ use postcard_rpc::{
     server::{Dispatch, Sender, SpawnContext},
 };
 type Tx = WireTxImpl<CriticalSectionRawMutex, Driver<'static>>;
+
 static STREAM: AtomicBool = AtomicBool::new(false);
 type LogLine = heapless::String<192>;
 static LOGS: embassy_sync::channel::Channel<CriticalSectionRawMutex, LogLine, 8> =
     embassy_sync::channel::Channel::new();
+
 /// Synchronous producers never wait for USB or a mutex held by the sender.
 pub fn log(line: LogLine) {
     let _ = LOGS.try_send(line);
 }
+
 pub struct Context;
+
 impl SpawnContext for Context {
     type SpawnCtxt = ();
+
     fn spawn_ctxt(&mut self) {}
 }
+
 fn pd_control(_: &mut Context, _: VarHeader, command: PdControl) -> ControlResult {
     crate::pd_service::control(command)
 }
+
 fn pd_status(_: &mut Context, _: VarHeader, _: ()) -> PdSnapshot {
     crate::pd_service::snapshot()
 }
+
 fn status(_: &mut Context, _: VarHeader, _: ()) -> Status {
     Status {
         protocol_version: PROTOCOL_VERSION,
@@ -38,9 +46,11 @@ fn status(_: &mut Context, _: VarHeader, _: ()) -> Status {
         hclk_hz: 192_000_000,
     }
 }
+
 fn stream(_: &mut Context, _: VarHeader, enabled: bool) {
     STREAM.store(enabled, Ordering::Relaxed);
 }
+
 async fn loader(_: &mut Context, _: VarHeader, _: ()) -> LoaderResult {
     crate::enter_loader(0x600d0002).await.map_err(|_| ())
 }
@@ -68,6 +78,7 @@ define_dispatch! {
     };
     topics_out: { list: TOPICS_OUT; };
 }
+
 pub async fn run(driver: Driver<'static>, spawner: embassy_executor::Spawner) {
     static STORAGE: WireStorage<CriticalSectionRawMutex, Driver<'static>> = WireStorage::new();
     static TX: static_cell::StaticCell<[u8; 512]> = static_cell::StaticCell::new();
@@ -116,6 +127,7 @@ pub async fn run(driver: Driver<'static>, spawner: embassy_executor::Spawner) {
     };
     embassy_futures::join::join5(usb.run(), serve, publish(sender.clone()), logging, pd).await;
 }
+
 async fn publish(sender: Sender<Tx>) {
     let mut seq = 0u32;
     loop {

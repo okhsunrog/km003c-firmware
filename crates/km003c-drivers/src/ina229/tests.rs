@@ -5,20 +5,24 @@ use std::vec::Vec;
 
 #[derive(Debug, PartialEq, Eq)]
 struct BusError;
+
 impl embedded_hal::spi::Error for BusError {
     fn kind(&self) -> ErrorKind {
         ErrorKind::Other
     }
 }
+
 #[derive(Default)]
 struct Mock {
     writes: Vec<Vec<u8>>,
     wrong_id: bool,
     fail: bool,
 }
+
 impl ErrorType for Mock {
     type Error = BusError;
 }
+
 impl SpiDevice for Mock {
     fn transaction(&mut self, operations: &mut [Operation<'_, u8>]) -> Result<(), BusError> {
         if self.fail {
@@ -55,6 +59,7 @@ impl SpiDevice for Mock {
         Ok(())
     }
 }
+
 #[test]
 fn sample_width_sign_and_physical_units() {
     let mut device = Ina229::new(Mock::default());
@@ -75,6 +80,7 @@ fn sample_width_sign_and_physical_units() {
     assert_eq!(wide.temperature_millicelsius(), -1000);
     assert!(device.release().writes.is_empty());
 }
+
 #[test]
 fn full_signed_range() {
     assert_eq!(signed20(0x7ffff0), 524287);
@@ -95,6 +101,7 @@ fn reset_checks_identity_before_writing_por_bit() {
     assert!(matches!(device.reset(), Err(Error::UnexpectedIdentity(_))));
     assert!(device.release().writes.is_empty());
 }
+
 #[test]
 fn probe_before_writes_and_start_last() {
     let mut device = Ina229::new(Mock::default());
@@ -111,6 +118,7 @@ fn probe_before_writes_and_start_last() {
         ]
     );
 }
+
 #[test]
 fn wrong_identity_invalid_config_and_bus_error_never_write() {
     let mut device = Ina229::new(Mock {

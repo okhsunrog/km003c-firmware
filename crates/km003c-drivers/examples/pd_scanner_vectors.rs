@@ -5,6 +5,7 @@ use km003c_drivers::pd::{
     tx::{self, Frame, Periods},
 };
 use std::{fmt::Write, fs};
+
 fn main() {
     let mut output = String::new();
     let mut state = 0x3b6e20c8u32;

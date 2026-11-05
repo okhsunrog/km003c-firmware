@@ -1,9 +1,12 @@
 use super::*;
+
 const BLOCK: &[u8; 96] = include_bytes!("../../tests/data/synthetic-calibration.bin");
+
 fn checksum(block: &mut [u8; 96]) {
     let crc = crc32(&block[..92]);
     block[92..].copy_from_slice(&crc.to_le_bytes());
 }
+
 #[test]
 fn matches_324_vectors_from_actual_native_instructions() {
     let c = Calibration::from_settings(BLOCK).unwrap();
@@ -24,6 +27,7 @@ fn matches_324_vectors_from_actual_native_instructions() {
     }
     assert_eq!(count, 324);
 }
+
 #[test]
 fn rejects_bad_data_instead_of_applying_defaults() {
     assert_eq!(Calibration::from_settings(&BLOCK[..95]), Err(Error::Length));
@@ -43,6 +47,7 @@ fn rejects_bad_data_instead_of_applying_defaults() {
         assert_eq!(Calibration::from_settings(&b), Err(error));
     }
 }
+
 #[test]
 fn constant_offset_form_and_checked_result() {
     let mut b = *BLOCK;

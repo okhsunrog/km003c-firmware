@@ -242,6 +242,7 @@ pub fn validate(status: u32, symbols: &[u8; CAPACITY]) -> Result<Option<Event>, 
     packet.bytes[..len].copy_from_slice(&bytes[..len]);
     Ok(Some(Event::Packet(packet)))
 }
+
 /// Fused scanner output is bytes (including CRC) followed by an EOP marker.
 /// Status still counts original 5-bit symbols, so header/NDO bounds and odd
 /// partial bytes receive the same checks as the symbol-based decoder.
@@ -249,6 +250,7 @@ pub fn validate(status: u32, symbols: &[u8; CAPACITY]) -> Result<Option<Event>, 
 pub fn validate_bytes(status: u32, bytes: &[u8; 35]) -> Result<Option<Event>, Error> {
     validate_bytes_observed(status, bytes, |_| {})
 }
+
 /// Same validation with CRC/assembly boundaries for board-owned DWT profiling.
 #[inline(always)]
 pub fn validate_bytes_observed(
@@ -325,6 +327,7 @@ pub fn decode<const MODE: u8, const FILTER: bool>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn fused_bytes_require_eop_shape_and_crc() {
         let mut bytes = [0; 35];

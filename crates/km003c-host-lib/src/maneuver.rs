@@ -2,6 +2,7 @@
 use anyhow::{Result, ensure};
 use km003c_interface::PdControl;
 use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Maneuver {
@@ -9,12 +10,14 @@ pub struct Maneuver {
     pub duration_ms: u64,
     pub steps: Vec<Step>,
 }
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Step {
     pub at_ms: u64,
     pub command: PdControl,
 }
+
 impl Maneuver {
     pub fn validate(&self) -> Result<()> {
         ensure!(!self.name.trim().is_empty(), "maneuver needs a name");
@@ -38,6 +41,7 @@ impl Maneuver {
         Ok(())
     }
 }
+
 pub fn load(path: &std::path::Path) -> Result<Maneuver> {
     let plan: Maneuver = serde_json::from_slice(&std::fs::read(path)?)?;
     plan.validate()?;
@@ -47,6 +51,7 @@ pub fn load(path: &std::path::Path) -> Result<Maneuver> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn reject_invalid_timeline_before_touching_hardware() {
         let mut m = Maneuver {

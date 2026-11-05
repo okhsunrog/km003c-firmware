@@ -7,11 +7,13 @@ pub struct Tile<const N: usize> {
     pixels: [Rgb565; N],
     size: Size,
 }
+
 impl<const N: usize> Default for Tile<N> {
     fn default() -> Self {
         Self::new()
     }
 }
+
 impl<const N: usize> Tile<N> {
     pub const fn new() -> Self {
         Self {
@@ -19,6 +21,7 @@ impl<const N: usize> Tile<N> {
             size: Size::new(0, 0),
         }
     }
+
     pub fn reset(&mut self, size: Size, background: Rgb565) {
         let count = size
             .width
@@ -28,18 +31,22 @@ impl<const N: usize> Tile<N> {
         self.size = size;
         self.pixels[..count].fill(background);
     }
+
     pub fn pixels(&self) -> &[Rgb565] {
         &self.pixels[..(self.size.width * self.size.height) as usize]
     }
 }
+
 impl<const N: usize> OriginDimensions for Tile<N> {
     fn size(&self) -> Size {
         self.size
     }
 }
+
 impl<const N: usize> DrawTarget for Tile<N> {
     type Color = Rgb565;
     type Error = Infallible;
+
     fn draw_iter<I: IntoIterator<Item = Pixel<Rgb565>>>(
         &mut self,
         pixels: I,
@@ -52,6 +59,7 @@ impl<const N: usize> DrawTarget for Tile<N> {
         }
         Ok(())
     }
+
     fn fill_solid(&mut self, area: &Rectangle, color: Rgb565) -> Result<(), Infallible> {
         let area = area.intersection(&self.bounding_box());
         if let Some(end) = area.bottom_right() {
@@ -67,6 +75,7 @@ impl<const N: usize> DrawTarget for Tile<N> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn clip_and_reset_without_transposing_rows() {
         let mut tile = Tile::<12>::new();

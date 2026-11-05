@@ -7,10 +7,12 @@ enum Slot {
     Ready,
     Reading,
 }
+
 pub struct Pool {
     slots: [Slot; 2],
     active: usize,
 }
+
 impl Default for Pool {
     fn default() -> Self {
         Self {
@@ -19,10 +21,12 @@ impl Default for Pool {
         }
     }
 }
+
 impl Pool {
     pub fn active(&self) -> usize {
         self.active
     }
+
     /// Publish the finished slot only if the other can immediately receive.
     /// Otherwise discard the newest burst and reuse its slot, preserving the
     /// older unread/borrowed burst. Caller counts the loss explicitly.
@@ -37,25 +41,31 @@ impl Pool {
         self.active = next;
         Some(old)
     }
+
     pub fn other_is_reading(&self) -> bool {
         self.slots[1 - self.active] == Slot::Reading
     }
+
     pub fn ready(&self) -> bool {
         self.slots.contains(&Slot::Ready)
     }
+
     pub fn acquire(&mut self) -> Option<usize> {
         let i = self.slots.iter().position(|s| *s == Slot::Ready)?;
         self.slots[i] = Slot::Reading;
         Some(i)
     }
+
     pub fn release(&mut self, i: usize) {
         assert_eq!(self.slots[i], Slot::Reading);
         self.slots[i] = Slot::Free;
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn stalled_reader_is_never_overwritten() {
         let mut p = Pool::default();
@@ -76,6 +86,7 @@ mod tests {
         assert_eq!(p.acquire(), Some(1));
         p.release(1);
     }
+
     #[test]
     fn fast_reader_alternates_indefinitely() {
         let mut p = Pool::default();

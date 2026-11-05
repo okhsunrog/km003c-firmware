@@ -9,12 +9,14 @@ use sha2::{Digest, Sha256};
 use std::{io::Write, path::Path, time::Duration};
 
 const KNOWN_LOADER: &[u8] = include_bytes!("../../../fw/bootloader_hw2.1_00000004-00003fff.bin");
+
 pub fn digest(data: &[u8]) -> String {
     Sha256::digest(data)
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect()
 }
+
 fn save_new(path: &Path, data: &[u8]) -> Result<()> {
     let mut file = std::fs::OpenOptions::new()
         .write(true)
@@ -25,6 +27,7 @@ fn save_new(path: &Path, data: &[u8]) -> Result<()> {
     file.sync_all()?;
     Ok(())
 }
+
 /// Reuses the library's authenticated request/confirmation and AES decoder.
 /// Loader confirmations can use their own response IDs; no APP-only reader is used.
 pub async fn read(d: &mut KM003C, address: u32, size: usize) -> Result<Vec<u8>> {
@@ -59,6 +62,7 @@ pub async fn read(d: &mut KM003C, address: u32, size: usize) -> Result<Vec<u8>> 
     }
     Ok(output)
 }
+
 pub async fn open(selector: DeviceSelector) -> Result<(KM003C, DeviceSelector)> {
     let found = find_firmware_device(&selector).await?;
     let stable = found.port_selector.unwrap_or(selector);
@@ -74,6 +78,7 @@ pub async fn open(selector: DeviceSelector) -> Result<(KM003C, DeviceSelector)> 
     );
     Ok((d, stable))
 }
+
 pub async fn enter(selector: DeviceSelector) -> Result<DeviceSelector> {
     let found = find_firmware_device(&selector).await?;
     let stable = found.port_selector.unwrap_or(selector);
@@ -84,6 +89,7 @@ pub async fn enter(selector: DeviceSelector) -> Result<DeviceSelector> {
     }
     Ok(stable)
 }
+
 fn installed_info(bytes: &[u8]) -> Result<InstalledFirmwareInfo> {
     ensure!(bytes.len() >= 0x460, "truncated application");
     let mut info = auth::DeviceInfo::default();
@@ -95,6 +101,7 @@ fn installed_info(bytes: &[u8]) -> Result<InstalledFirmwareInfo> {
         crc32: u32::from_le_bytes(bytes[0x42c..0x430].try_into()?),
     })
 }
+
 pub async fn backup(selector: DeviceSelector, path: &Path) -> Result<()> {
     ensure!(
         !path.exists(),
@@ -111,6 +118,7 @@ pub async fn backup(selector: DeviceSelector, path: &Path) -> Result<()> {
     installed_info(&data)?.validate_application(&data)?;
     save_new(path, &data)
 }
+
 pub async fn verify(selector: DeviceSelector, image: &FirmwareImage) -> Result<()> {
     image.validate_for_update()?;
     let (mut d, _) = open(selector).await?;
@@ -124,6 +132,7 @@ pub async fn verify(selector: DeviceSelector, image: &FirmwareImage) -> Result<(
     );
     Ok(())
 }
+
 /// On any failure the device stays in DFU; application start is a separate step.
 pub async fn flash(
     selector: DeviceSelector,
@@ -159,6 +168,7 @@ pub async fn flash(
     save_new(&evidence.join("verified.json"),serde_json::to_string_pretty(&serde_json::json!({"application_sha256":digest(&actual),"loader_unchanged":true,"readback_verified":true}))?.as_bytes())?;
     Ok(stable)
 }
+
 pub async fn start(selector: DeviceSelector) -> Result<()> {
     let (mut d, stable) = open(selector).await?;
     d.jump_to_application().await?;

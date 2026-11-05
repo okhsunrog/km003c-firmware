@@ -22,6 +22,7 @@ const PC15: usize = 0x40053cbc;
 // The selected PA/PC output pair and TimerA2 PWM channel are locked for an
 // attachment. Native 0x40ab0 maps CC1 to channel 1, CC2 to channel 2.
 static INPUT: AtomicU8 = AtomicU8::new(1);
+
 struct Pins {
     pa: usize,
     gate: usize,
@@ -29,6 +30,7 @@ struct Pins {
     cconr: usize,
     bit: u16,
 }
+
 fn pins() -> Pins {
     if INPUT.load(Ordering::Acquire) == 2 {
         Pins {
@@ -48,6 +50,7 @@ fn pins() -> Pins {
         }
     }
 }
+
 pub fn input() -> Input {
     if INPUT.load(Ordering::Acquire) == 2 {
         Input::Cmp1Inp2
@@ -76,6 +79,7 @@ fn arm_lease(ms: u64) {
         version,
     )));
 }
+
 #[embassy_executor::task]
 pub async fn lease_task() {
     use embassy_futures::select::{Either, select};
@@ -98,9 +102,11 @@ pub async fn lease_task() {
         };
     }
 }
+
 // Cancelling a transmit future also stops active DMA/output. Completed TX
 // keeps CC attached; only an unfinished waveform needs the release path.
 struct ActiveTx;
+
 impl Drop for ActiveTx {
     fn drop(&mut self) {
         if matches!(STATE.load(Ordering::Acquire), 1 | 2) {
@@ -110,18 +116,24 @@ impl Drop for ActiveTx {
 }
 
 static START_CYCLES: AtomicU32 = AtomicU32::new(0);
+
 pub fn start_cycles() -> u32 {
     START_CYCLES.load(Ordering::Acquire)
 }
+
 static WAKER: embassy_sync::waitqueue::AtomicWaker = embassy_sync::waitqueue::AtomicWaker::new();
+
 struct Storage(UnsafeCell<[u16; 860]>);
+
 // Only the capture executor writes, while TX DMA is quiescent. Static storage
 // remains valid even if a failed bus master cannot be proved stopped.
 unsafe impl Sync for Storage {}
 static BUFFER: Storage = Storage(UnsafeCell::new([0; 860]));
+
 fn r(a: usize) -> u32 {
     unsafe { (a as *const u32).read_volatile() }
 }
+
 fn w(a: usize, v: u32) {
     unsafe { (a as *mut u32).write_volatile(v) }
 }
@@ -129,6 +141,7 @@ fn w(a: usize, v: u32) {
 pub fn attached() -> bool {
     LEASE.load(Ordering::Acquire) != 0
 }
+
 pub fn extend_lease(seconds: u16) {
     cortex_m::interrupt::free(|_| {
         if attached() {
@@ -136,6 +149,7 @@ pub fn extend_lease(seconds: u16) {
         }
     });
 }
+
 fn bounded_measurements() -> Result<(), &'static str> {
     let crate::measurement::State::Sample(sample) = crate::measurement::snapshot() else {
         return Err("INA229 unavailable");
@@ -173,6 +187,7 @@ pub async fn prepare() -> Result<Input, &'static str> {
         embassy_time::Timer::after_millis(20).await;
     }
 }
+
 /// Caller exclusively owns an RX input already armed on the selected CC.
 pub async fn attach(selected: Input) -> Result<(), &'static str> {
     bounded_measurements()?;
@@ -201,6 +216,7 @@ pub async fn attach(selected: Input) -> Result<(), &'static str> {
     });
     Ok(())
 }
+
 /// A physical disconnect/flip must be stable across several ADC scans. TX's
 /// selected pin never changes in flight; the owner drops the stack and releases
 /// outputs before restarting with the new orientation and fresh protocol state.
@@ -219,6 +235,7 @@ pub async fn disconnected() {
         }
     }
 }
+
 pub async fn release_and_wait() -> Result<(), &'static str> {
     release();
     crate::cc_frontend::set(false)
@@ -231,6 +248,7 @@ fn stop_tx_dma() -> bool {
     fence(Ordering::SeqCst);
     (0..2000).any(|_| r(DMA + 0x24) & (2 << 16) == 0)
 }
+
 fn outputs_off() {
     let p = pins();
     write16(p.pconr, 0xe0); // OUTEN off on the selected PWM channel.
@@ -240,6 +258,7 @@ fn outputs_off() {
     write16(p.pa, 0x8000); // Restore ADC/CMP analog input, digital output off.
     write16(0x40053bfc, 0xa500);
 }
+
 /// Safe from timeout, cancellation, fault/reset or USB disconnect, even before RX init.
 /// DMA is stopped before any later buffer reuse; no stack memory is involved.
 pub fn release() {
@@ -259,6 +278,7 @@ pub fn release() {
         }
     });
 }
+
 /// Timer/DMA IRQs own the DMA -> last-interval -> RX handoff.
 pub fn on_interrupt(kind: u8) -> bool {
     // Serialize with the lease timeout cleanup as well as other DMA IRQs.
@@ -266,6 +286,7 @@ pub fn on_interrupt(kind: u8) -> bool {
     // its stale state transition. The body is bounded and never awaits.
     cortex_m::interrupt::free(|_| on_interrupt_locked(kind))
 }
+
 fn on_interrupt_locked(kind: u8) -> bool {
     let state = STATE.load(Ordering::Acquire);
     if !matches!(state, 1 | 2) {

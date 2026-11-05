@@ -7,18 +7,22 @@ use embassy_hc32::{
     pac::interrupt,
 };
 use embedded_hal_async::i2c::I2c;
+
 #[interrupt]
 fn INT110() {
     i2c::on_interrupt();
 }
+
 #[interrupt]
 fn INT111() {
     i2c::on_interrupt();
 }
+
 #[interrupt]
 fn INT112() {
     i2c::on_interrupt();
 }
+
 #[interrupt]
 fn INT113() {
     i2c::on_interrupt();
@@ -29,6 +33,7 @@ pub type Device = embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice<'stat
 type DeviceError = embassy_embedded_hal::shared_bus::I2cDeviceError<Error>;
 pub type SharedBus =
     embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex, I2c3>;
+
 #[derive(Clone, Copy)]
 pub struct Aw9523 {
     bus: &'static SharedBus,
@@ -64,17 +69,21 @@ impl Aw9523 {
         let registers = DEVICE.init(embassy_sync::mutex::Mutex::new(Device::new(bus)));
         (Self { bus, registers }, routes)
     }
+
     pub fn sensor_bus(&self) -> Device {
         Device::new(self.bus)
     }
+
     async fn read_reg(bus: &mut Device, register: u8) -> Result<u8, DeviceError> {
         let mut byte = [0];
         bus.write_read(0x5b, &[register], &mut byte).await?;
         Ok(byte[0])
     }
+
     async fn write_reg(bus: &mut Device, register: u8, value: u8) -> Result<(), DeviceError> {
         bus.write(0x5b, &[register, value]).await
     }
+
     // Set output latch before enabling RESET's output driver. This avoids an
     // unintended low pulse while converting the pin to GPIO/output mode.
     pub async fn lcd_reset(&self) -> Result<(), DeviceError> {
@@ -97,12 +106,14 @@ impl Aw9523 {
         embassy_time::Timer::after_millis(10).await;
         Ok(())
     }
+
     pub async fn backlight(&self, level: u8) -> Result<(), DeviceError> {
         let mut bus = self.registers.lock().await;
         // Same two dimming registers as native boot routine 0x11be.
         Self::write_reg(&mut bus, 0x22, level).await?;
         Self::write_reg(&mut bus, 0x23, level / 2).await
     }
+
     pub async fn cc2_rd(&self, enabled: bool) -> Result<(), crate::cc_frontend::Error> {
         use crate::cc_frontend::Error as E;
         const OUTPUT0: u8 = 2;

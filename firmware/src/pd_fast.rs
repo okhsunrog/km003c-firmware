@@ -8,6 +8,7 @@ core::arch::global_asm!(
     d=const symbols::WORDS[3], e=const symbols::WORDS[4], f=const symbols::WORDS[5], g=const symbols::WORDS[6],
 );
 core::arch::global_asm!(include_str!("pd_symbols.S"), options(raw));
+
 const fn nibble_word(i: usize) -> u32 {
     u32::from_le_bytes([
         symbols::NIBBLES[4 * i],

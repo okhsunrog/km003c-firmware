@@ -1,14 +1,18 @@
 //! Quarter-turn transforms for streamed rectangular tiles, without a framebuffer.
 use embedded_graphics::{prelude::*, primitives::Rectangle};
+
 #[derive(Clone, Copy, Default)]
 pub struct Rotation(u8);
+
 impl Rotation {
     pub fn new(turns: u8) -> Self {
         Self(turns % 4)
     }
+
     pub fn turns(self) -> u8 {
         self.0
     }
+
     pub fn area(self, area: Rectangle, side: i32) -> Rectangle {
         let (x, y) = (area.top_left.x, area.top_left.y);
         let (w, h) = (area.size.width as i32, area.size.height as i32);
@@ -20,6 +24,7 @@ impl Rotation {
         };
         Rectangle::new(Point::new(x, y), Size::new(w as u32, h as u32))
     }
+
     /// Source index for each pixel in the rotated window's row-major stream.
     pub fn source(self, index: usize, width: usize, height: usize) -> usize {
         match self.0 {
@@ -30,9 +35,11 @@ impl Rotation {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn asymmetric_tile_pixels_and_origin() {
         let expected = [

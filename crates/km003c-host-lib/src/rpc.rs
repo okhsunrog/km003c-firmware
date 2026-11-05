@@ -10,12 +10,14 @@ use postcard_rpc::{header::VarSeqKind, host_client::HostClient, standard_icd::Wi
 use std::time::Duration;
 
 pub type Rpc = HostClient<WireError>;
+
 pub struct Client {
     pub rpc: Rpc,
     /// The physical port remains stable when firmware and loader re-enumerate.
     pub selector: DeviceSelector,
     pub protocol_version: u16,
 }
+
 impl Client {
     pub async fn connect(selector: DeviceSelector) -> Result<Self> {
         let found = tokio::time::timeout(Duration::from_secs(5), async {
@@ -67,12 +69,14 @@ impl Client {
             protocol_version: status.protocol_version,
         })
     }
+
     pub async fn status(&self) -> Result<Status> {
         Ok(
             tokio::time::timeout(Duration::from_secs(3), self.rpc.send_resp::<GetStatus>(&()))
                 .await??,
         )
     }
+
     pub async fn pd_status(&self) -> Result<km003c_interface::PdSnapshot> {
         Ok(tokio::time::timeout(
             Duration::from_secs(1),
@@ -80,6 +84,7 @@ impl Client {
         )
         .await??)
     }
+
     pub async fn stream(&self, enabled: bool) -> Result<()> {
         tokio::time::timeout(
             Duration::from_secs(3),
@@ -88,6 +93,7 @@ impl Client {
         .await??;
         Ok(())
     }
+
     pub async fn control(&self, command: PdControl) -> Result<u32> {
         ensure!(
             self.protocol_version == km003c_interface::PROTOCOL_VERSION,
@@ -102,6 +108,7 @@ impl Client {
         .await??;
         response.map_err(|e| anyhow!("PD command rejected: {e:?}"))
     }
+
     /// A reset may interrupt its own reply. Success is DFU on the same port,
     /// never merely a timeout or a disconnected RPC handle.
     pub async fn loader(&self) -> Result<()> {
@@ -113,6 +120,7 @@ impl Client {
         wait_dfu(&self.selector).await
     }
 }
+
 pub fn validate_control(command: PdControl) -> Result<()> {
     match command {
         PdControl::Sink { volts, seconds } => ensure!(
@@ -126,6 +134,7 @@ pub fn validate_control(command: PdControl) -> Result<()> {
     }
     Ok(())
 }
+
 pub async fn wait_dfu(selector: &DeviceSelector) -> Result<()> {
     tokio::time::timeout(Duration::from_secs(15), async {
         loop {

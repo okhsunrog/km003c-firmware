@@ -8,6 +8,7 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channe
 use km003c_interface::{
     ControlError, ControlResult, PdCompletion, PdControl, PdEndReason, PdEvent, PdSnapshot, PdState,
 };
+
 pub static EVENTS: Channel<CriticalSectionRawMutex, PdEvent, 32> = Channel::new();
 use core::sync::atomic::{AtomicU32, Ordering};
 // OWNER reserves a queued/running capture. Stop cannot clear a newer reservation.
@@ -24,6 +25,7 @@ static SNAPSHOT: embassy_sync::blocking_mutex::Mutex<
     last_session: None,
     last_command: None,
 }));
+
 pub fn snapshot() -> PdSnapshot {
     SNAPSHOT.lock(|s| {
         let mut x = s.get();
@@ -32,6 +34,7 @@ pub fn snapshot() -> PdSnapshot {
         x
     })
 }
+
 fn complete(session: Option<PdCompletion>, command: PdCompletion) {
     SNAPSHOT.lock(|s| {
         let mut x = s.get();
@@ -48,13 +51,16 @@ struct Request {
     id: u32,
     command: PdControl,
 }
+
 static COMMANDS: Channel<CriticalSectionRawMutex, Request, 4> = Channel::new();
 static EXECUTOR: embassy_executor::InterruptExecutor = embassy_executor::InterruptExecutor::new();
 use embassy_hc32::pac::interrupt;
+
 #[interrupt]
 fn INT030() {
     unsafe { EXECUTOR.on_interrupt() };
 }
+
 pub fn start() {
     // Software-pended PD executor; timer/DMA IRQs may preempt the decoder.
     unsafe {
@@ -65,6 +71,7 @@ pub fn start() {
     }
     EXECUTOR.start(interrupt::INT030).spawn(task().unwrap());
 }
+
 pub fn control(command: PdControl) -> ControlResult {
     if !snapshot().available {
         return Err(ControlError::Unavailable);
@@ -116,6 +123,7 @@ pub fn state(state: PdState, value: u32) {
         value,
     });
 }
+
 pub fn sink_status(s: &str, value: u32) {
     state(
         match s {
@@ -130,6 +138,7 @@ pub fn sink_status(s: &str, value: u32) {
         value,
     );
 }
+
 pub fn cc_state(s: &str, input: u8) {
     state(
         match s {
@@ -142,6 +151,7 @@ pub fn cc_state(s: &str, input: u8) {
         u32::from(input),
     );
 }
+
 pub fn sink_rx(event: km003c_drivers::pd::Event, meta: Meta) {
     if let km003c_drivers::pd::Event::Packet(p) = event {
         let mut bytes = [0; 30];
@@ -157,6 +167,7 @@ pub fn sink_rx(event: km003c_drivers::pd::Event, meta: Meta) {
         });
     }
 }
+
 pub fn sink_tx(data: &[u8]) {
     let mut bytes = [0; 30];
     bytes[..data.len()].copy_from_slice(data);
@@ -169,6 +180,7 @@ pub fn sink_tx(data: &[u8]) {
         phases: crate::pd_sink::phases(),
     });
 }
+
 #[embassy_executor::task]
 async fn task() {
     let receiver = match unsafe { Receiver::new(Input::Cmp1Inp1, 0x20) } {
@@ -301,6 +313,7 @@ async fn task() {
         );
     }
 }
+
 /// Passive monitoring never attaches Rd or acknowledges packets. Reconfiguration
 /// happens through the capture owner's stop/start boundary, never during TX.
 async fn monitor(rx: &mut Buffered, fixed: Option<u8>) {

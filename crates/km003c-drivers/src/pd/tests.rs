@@ -7,9 +7,11 @@ use std::{vec, vec::Vec};
 const ENCODE: [u8; 16] = [
     30, 9, 20, 21, 10, 11, 14, 15, 18, 19, 22, 23, 26, 27, 28, 29,
 ];
+
 fn symbol(bits: &mut Vec<bool>, symbol: u8) {
     bits.extend((0..5).map(|bit| symbol & (1 << bit) != 0));
 }
+
 fn frame(wire: &[u8], ordered: [u8; 4], crc: u32) -> Vec<bool> {
     let mut bits: Vec<bool> = (0..64).map(|n| n % 2 != 0).collect();
     for s in ordered {
@@ -22,6 +24,7 @@ fn frame(wire: &[u8], ordered: [u8; 4], crc: u32) -> Vec<bool> {
     symbol(&mut bits, 13);
     bits
 }
+
 fn feed(decoder: &mut Decoder, bits: &[bool], jitter: bool) -> Vec<Result<Event, Error>> {
     let mut events = Vec::new();
     for (index, &bit) in bits.iter().enumerate() {
@@ -40,11 +43,13 @@ fn feed(decoder: &mut Decoder, bits: &[bool], jitter: bool) -> Vec<Result<Event,
     }
     events
 }
+
 #[test]
 fn independent_crc_check_vector() {
     assert_eq!(crc32(b"123456789"), 0xcbf43926);
     assert_eq!(crc32(&[]), 0);
 }
+
 #[test]
 fn burst_decoder_checks_crc_truncation_and_leading_noise() {
     let wire = [1, 0];
@@ -69,6 +74,7 @@ fn burst_decoder_checks_crc_truncation_and_leading_noise() {
     assert_eq!(burst::decode(&noisy, 20, 5), burst::decode(&good, 20, 5));
     assert_eq!(burst::decode(&good, 0, 5), Err(Error::Timing));
 }
+
 #[test]
 fn known_goodcrc_frame_and_jitter() {
     // Header 0x0001 (GoodCRC, message ID 0), CRC cross-checked with Python zlib.
@@ -83,6 +89,7 @@ fn known_goodcrc_frame_and_jitter() {
     assert_eq!(packet.wire(), &[1, 0]);
     assert_eq!(d.finish(), Ok(()));
 }
+
 #[test]
 fn all_sops_max_payload_and_extended_chunks() {
     for (i, ordered) in [
@@ -115,6 +122,7 @@ fn all_sops_max_payload_and_extended_chunks() {
         );
     }
 }
+
 #[test]
 fn rejects_crc_and_recovers_for_next_packet() {
     let mut d = Decoder::new(20, 3).unwrap();
@@ -125,6 +133,7 @@ fn rejects_crc_and_recovers_for_next_packet() {
     let events = feed(&mut d, &frame(&[1, 0], [24, 24, 24, 17], 0x58c223be), false);
     assert!(matches!(events.as_slice(), [Ok(Event::Packet(_))]));
 }
+
 #[test]
 fn resets_timing_truncation_and_eop_errors() {
     assert!(Decoder::new(0, 0).is_none());
@@ -150,6 +159,7 @@ fn resets_timing_truncation_and_eop_errors() {
     symbol(&mut missing, 30);
     assert_eq!(feed(&mut d, &missing, false), [Err(Error::MissingEop)]);
 }
+
 #[test]
 fn reset_ordered_sets_and_back_to_back_frames() {
     let mut d = Decoder::new(20, 3).unwrap();

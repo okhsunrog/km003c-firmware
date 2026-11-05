@@ -1,15 +1,20 @@
 //! Retained text trace. Formatting must never mask PD capture interrupts.
 use core::fmt::Write;
+
 struct Logger;
+
 static LOGGER: Logger = Logger;
 const CAPACITY: usize = 3072;
+
 fn cursor() -> *mut u32 {
     0x200f0c00 as *mut u32
 }
+
 impl log::Log for Logger {
     fn enabled(&self, _: &log::Metadata<'_>) -> bool {
         true
     }
+
     fn log(&self, record: &log::Record<'_>) {
         // The software GoodCRC path must not format verbose stack messages
         // before starting TX. Packet diagnostics are queued by the board driver.
@@ -19,9 +24,11 @@ impl log::Log for Logger {
         if matches!(record.args().as_str(), Some("irq" | "SETUP waiting")) {
             return;
         }
+
         // First count while interrupts remain enabled. Reserve a contiguous logical
         // span in one short critical section, then format into it outside that lock.
         struct Count(usize);
+
         impl Write for Count {
             fn write_str(&mut self, s: &str) -> core::fmt::Result {
                 self.0 = self.0.saturating_add(s.len());
@@ -36,11 +43,13 @@ impl log::Log for Logger {
             cursor().write_volatile(n.wrapping_add(length as u32));
             n
         });
+
         struct Reserved {
             position: u32,
             remaining: usize,
             line: heapless::String<192>,
         }
+
         impl Write for Reserved {
             fn write_str(&mut self, s: &str) -> core::fmt::Result {
                 let _ = self.line.push_str(s);
@@ -74,8 +83,10 @@ impl log::Log for Logger {
             crate::rpc::log(reserved.line);
         }
     }
+
     fn flush(&self) {}
 }
+
 pub fn init() {
     unsafe {
         cursor().write_volatile(0);

@@ -193,6 +193,7 @@ fn main() -> ! {
 fn INT080() {
     embassy_hc32::time_driver::on_interrupt();
 }
+
 #[interrupt]
 fn INT081() {
     embassy_hc32::time_driver::on_interrupt();
@@ -217,7 +218,9 @@ unsafe fn HardFault(_frame: &cortex_m_rt::ExceptionFrame) -> ! {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     cortex_m::interrupt::disable();
+
     struct RetentionWriter(usize);
+
     impl core::fmt::Write for RetentionWriter {
         fn write_str(&mut self, text: &str) -> core::fmt::Result {
             for byte in text.bytes() {
