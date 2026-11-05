@@ -55,9 +55,10 @@ never enables Rd or sends GoodCRC. Stop ends capture through the same owner as
 active sessions. It uses the interrupt-rearmed buffers and validates CRC before
 publishing packets.
 
-After the RPC migration, passive monitoring has been exercised without a second
-PD participant; receipt of actual pass-through PD traffic remains unverified on
-hardware. An active 20 V session in the later
+After the RPC migration, passive monitoring with a Pixel and charger received
+packets on both CC inputs in separate sessions; automatic reorientation with
+packets after the flip is still unverified. See the
+[passive capture evidence](../hardware/rpc-passive-pixel/README.md). An active 20 V session in the later
 [workspace test](../hardware/workspace/README.md) reached Ready but recorded six
 receive overruns. The earlier RPC cleanup session recorded zero, so neither
 capture establishes that startup losses have been eliminated.

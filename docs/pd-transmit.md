@@ -51,6 +51,40 @@ ordinary/chunked frames and does not claim support for arbitrary long frames.
 [Native C/assembly exports and provenance](../analysis/pd207/README.md) distinguish
 instruction evidence from inferred decompiler types and signatures.
 
+### Receive capacity and observed overruns
+
+The stock `0x934e` passes `0xb2c` (2860) to `0xfa02`, which writes the DMA
+transfer count. Each of its two buffers holds 2860 halfwords (5720 bytes); the
+captured count is stored at offset `0x1658`. Our `pd_buffered` uses two buffers
+of 860 halfwords (1720 bytes) each. Both configure DMA1 channel 2 from the
+TimerA2 capture register, comparator input through CMP1/DAC1, and DCU1 event
+counting; both use period `0x98` to delimit a burst. Stock's task at `0x1ed58`
+switches and rearms the other buffer before decoding the completed buffer.
+The exports do not establish that stock detects or counts a slow consumer in
+the same way as our pool.
+
+Our `overruns` counter does **not** mean the 860-sample DMA buffer became full.
+The IRQ increments it when a completed burst cannot be published because the
+other buffer is still READY or READING; it discards the new burst and rearms the
+same buffer. `full` separately counts DMA transfer-complete, and `held_overruns`
+is the subset with the other buffer in READING state. The
+[workspace 20 V capture](../hardware/workspace/20v.ndjson) reports 6 overruns,
+0 held overruns and 0 full buffers: in that run the other buffer was READY at
+each counted loss. Enlarging each buffer does not provide another slot for an
+independent burst, and is not an established fix for these six losses.
+
+One plausible startup mechanism needs measurement: the receiver is armed before
+Rd is enabled, while `usbpd`'s sink waits for VBUS before calling `receive`.
+Our VBUS check uses an INA229 snapshot updated every 250 ms, so the hardware can
+capture bursts while the sink is not yet consuming them. This is consistent with
+READY-slot pressure, but the recorded counters are only emitted at session end;
+they do not timestamp individual overruns or prove this mechanism. A follow-up
+should timestamp slot transitions and sink/VBUS state, then test startup and
+passive traffic on both CC orientations. The historical buffered-reception
+description refers to an earlier CDC implementation that copied frames into a
+staging buffer; the current sink and monitor decode directly while holding the
+frame guard.
+
 ## TX, completion and errors
 
 The 2.0.7 sequence is:

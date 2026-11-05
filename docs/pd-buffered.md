@@ -1,5 +1,10 @@
 # Interrupt-rearmed PD reception
 
+This page describes the earlier CDC bring-up implementation and its historical
+tests. The current RPC paths and the comparison with stock 2.0.7, including
+later overruns, are documented in [PD transmission](pd-transmit.md#receive-capacity-and-observed-overruns)
+and [RPC](rpc.md).
+
 The receiver uses the native design's core principle: two DMA buffers of 860
 halfword intervals. Packet-gap IRQ processing rearms the alternate buffer before
 waking an independent decoder. It does not wait for USB or the UI.
