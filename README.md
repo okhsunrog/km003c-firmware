@@ -74,8 +74,20 @@ the versions tested then; they are not the current build or host interface.
 
 The root workspace contains `km003c-interface`, `km003c-drivers`,
 `km003c-host-lib` and `km003c-host-cli`. The excluded `firmware/` crate has its
-own Thumb target and lockfile. `just check` verifies host and firmware separately.
-Install the Thumb target and cargo-binutils for firmware builds and packaging.
+own Thumb target and lockfile. `just check` verifies host and firmware separately:
+rustfmt, Clippy with warnings denied, host tests with all features, and a release
+firmware build. [CI](.github/workflows/ci.yml) runs the same checks on stable Rust
+for pushes and pull requests, and can also be started manually. These are software
+checks; device testing is separate.
+
+Install the check/build prerequisites with rustup:
+
+```sh
+rustup component add rustfmt clippy
+rustup target add thumbv7em-none-eabihf
+```
+
+Packaging additionally requires cargo-binutils and the `llvm-tools` component.
 
 ```sh
 just package artifacts/km003c.mencrypt
