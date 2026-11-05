@@ -1,0 +1,11 @@
+{
+  "name": "unloaded-fixed-profiles",
+  "duration_ms": 7000,
+  "measurement_interval_ms": 20,
+  "steps": [
+    {"at_ms": 0, "command": {"Sink": {"volts": 15, "current_ma": 100, "seconds": 10}}},
+    {"at_ms": 2000, "command": {"SetProfile": {"volts": 9, "current_ma": 100}}},
+    {"at_ms": 4000, "command": {"SetProfile": {"volts": 5, "current_ma": 100}}},
+    {"at_ms": 6000, "command": "Stop"}
+  ]
+}

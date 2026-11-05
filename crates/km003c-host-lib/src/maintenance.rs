@@ -1,5 +1,5 @@
 //! Native-loader operations. Writes never retry an ambiguous data transfer.
-use crate::rpc::Client;
+use crate::rpc::{Client, wait_dfu};
 use anyhow::{Context, Result, bail, ensure};
 use km003c_lib::{
     DeviceSelector, KM003C, auth,
@@ -82,10 +82,25 @@ pub async fn open(selector: DeviceSelector) -> Result<(KM003C, DeviceSelector)> 
 pub async fn enter(selector: DeviceSelector) -> Result<DeviceSelector> {
     let found = find_firmware_device(&selector).await?;
     let stable = found.port_selector.unwrap_or(selector);
-    if found.mode != FirmwareUsbMode::Dfu {
-        // Only our RPC app is rebooted automatically. Stock protocol operations
-        // remain in km003c-lib and are not guessed for unknown USB interfaces.
+    if found.mode == FirmwareUsbMode::Dfu {
+        return Ok(stable);
+    }
+    if found.product_string.as_deref() == Some("KM003C Rust RPC") {
         Client::connect(stable.clone()).await?.loader().await?;
+    } else {
+        ensure!(
+            found.mode == FirmwareUsbMode::Application,
+            "unknown USB firmware mode"
+        );
+        let mut app = KM003C::open_maintenance(stable.clone()).await?;
+        let info = app.get_bootloader_info().await?;
+        ensure!(
+            info.model == "KM003C" && info.hw_version == "2.1",
+            "unsupported device: {info:?}"
+        );
+        app.jump_to_dfu().await?;
+        drop(app);
+        wait_dfu(&stable).await?;
     }
     Ok(stable)
 }

@@ -27,6 +27,8 @@ struct Args {
 #[derive(Subcommand)]
 enum Command {
     Status,
+    /// Latest calibrated ADC sample, with acquisition time and sequence.
+    Measure,
     /// Current PD owner and last command/session results.
     PdStatus,
     Capture {
@@ -34,6 +36,8 @@ enum Command {
         seconds: u64,
         #[arg(long)]
         output: Option<PathBuf>,
+        #[arg(long, default_value_t = 250)]
+        interval_ms: u16,
     },
     Monitor {
         #[arg(default_value = "auto")]
@@ -42,6 +46,8 @@ enum Command {
         seconds: u64,
         #[arg(long)]
         output: Option<PathBuf>,
+        #[arg(long, default_value_t = 250)]
+        interval_ms: u16,
     },
     Sink {
         volts: u16,
@@ -49,8 +55,27 @@ enum Command {
         seconds: u64,
         #[arg(long)]
         output: Option<PathBuf>,
+        #[arg(long, default_value_t = 100)]
+        current_ma: u16,
+        #[arg(long, default_value_t = 20)]
+        interval_ms: u16,
+    },
+    /// Record ADC + PD while accepting profile/status/stop commands on stdin.
+    Session {
+        /// Start an explicit active sink; otherwise start a passive monitor.
+        #[arg(long)]
+        sink: Option<u16>,
+        #[arg(long, default_value_t = 100)]
+        current_ma: u16,
+        #[arg(long, default_value_t = 600)]
+        seconds: u64,
+        #[arg(long, default_value_t = 20)]
+        interval_ms: u16,
+        #[arg(long)]
+        output: Option<PathBuf>,
     },
     Stop,
+    /// Enter native DFU from stock/custom firmware and confirm re-enumeration.
     Loader,
     /// Run a validated JSON timeline and record its commands, events and final Stop.
     Maneuver {
@@ -91,6 +116,10 @@ async fn main() -> Result<()> {
         .serial
         .map_or(DeviceSelector::First, DeviceSelector::SerialNumber);
     match args.command {
+        Command::Loader => {
+            maintenance::enter(selector).await?;
+            println!("Native DFU confirmed on the selected port");
+        }
         Command::Package { binary, output } => {
             let data = package::package(&std::fs::read(&binary)?)?;
             use std::io::Write;
@@ -132,9 +161,19 @@ async fn main() -> Result<()> {
         command => {
             // Validate arguments before connecting or enabling any stream/output.
             let plan = match &command {
-                Command::Capture { seconds, .. } => Some(plan(*seconds, Vec::new())?),
-                Command::Monitor { input, seconds, .. } => Some(plan(
+                Command::Capture {
+                    seconds,
+                    interval_ms,
+                    ..
+                } => Some(plan(*seconds, *interval_ms, Vec::new())?),
+                Command::Monitor {
+                    input,
+                    seconds,
+                    interval_ms,
+                    ..
+                } => Some(plan(
                     *seconds,
+                    *interval_ms,
                     vec![PdControl::Monitor {
                         input: if input == "auto" {
                             None
@@ -143,17 +182,43 @@ async fn main() -> Result<()> {
                         },
                     }],
                 )?),
-                Command::Sink { volts, seconds, .. } => {
+                Command::Sink {
+                    volts,
+                    seconds,
+                    current_ma,
+                    interval_ms,
+                    ..
+                } => {
                     ensure!(*seconds <= 590, "sink capture exceeds maximum lease");
                     Some(plan(
                         *seconds,
+                        *interval_ms,
                         vec![PdControl::Sink {
                             volts: *volts,
                             seconds: u16::try_from(*seconds + 5)?,
+                            current_ma: *current_ma,
                         }],
                     )?)
                 }
-                Command::Stop => Some(plan(1, vec![PdControl::Stop])?),
+                Command::Session {
+                    sink,
+                    current_ma,
+                    seconds,
+                    interval_ms,
+                    ..
+                } => Some(plan(
+                    *seconds,
+                    *interval_ms,
+                    vec![match sink {
+                        Some(volts) => PdControl::Sink {
+                            volts: *volts,
+                            current_ma: *current_ma,
+                            seconds: u16::try_from(*seconds)?,
+                        },
+                        None => PdControl::Monitor { input: None },
+                    }],
+                )?),
+                Command::Stop => Some(plan(1, 250, vec![PdControl::Stop])?),
                 _ => None,
             };
             if let Some(plan) = &plan {
@@ -162,15 +227,24 @@ async fn main() -> Result<()> {
             let client = Client::connect(selector).await?;
             match command {
                 Command::Status => println!("{:?}", client.status().await?),
+                Command::Measure => println!("{:?}", client.measurement().await?),
                 Command::PdStatus => println!("{:?}", client.pd_status().await?),
-                Command::Loader => {
-                    client.loader().await?;
-                    println!("Native DFU confirmed on the selected port");
-                }
                 Command::Capture { output, .. }
                 | Command::Monitor { output, .. }
                 | Command::Sink { output, .. } => {
                     capture::run(&client, plan.as_ref().unwrap(), output.as_deref()).await?
+                }
+                Command::Session { output, .. } => {
+                    eprintln!(
+                        "Commands: status | profile VOLTS MILLIAMPS | stop | sink VOLTS MILLIAMPS SECONDS | monitor auto/1/2 | quit"
+                    );
+                    capture::run_interactive(
+                        &client,
+                        plan.as_ref().unwrap(),
+                        output.as_deref(),
+                        true,
+                    )
+                    .await?;
                 }
                 Command::Stop => capture::run(&client, plan.as_ref().unwrap(), None).await?,
                 _ => unreachable!(),
@@ -180,7 +254,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn plan(seconds: u64, commands: Vec<PdControl>) -> Result<Maneuver> {
+fn plan(seconds: u64, measurement_interval_ms: u16, commands: Vec<PdControl>) -> Result<Maneuver> {
     ensure!(
         (1..=600).contains(&seconds),
         "capture duration must be 1..600 seconds"
@@ -188,6 +262,7 @@ fn plan(seconds: u64, commands: Vec<PdControl>) -> Result<Maneuver> {
     Ok(Maneuver {
         name: "cli".into(),
         duration_ms: seconds * 1000,
+        measurement_interval_ms,
         steps: commands
             .into_iter()
             .map(|command| Step { at_ms: 0, command })

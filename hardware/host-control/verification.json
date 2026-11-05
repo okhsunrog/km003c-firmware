@@ -1,0 +1,142 @@
+{
+  "date": "2026-11-06",
+  "protocol_version": 4,
+  "application_bytes": 301508,
+  "verification": {
+    "application_sha256": "582027f7ce43e762bb237e5f33c0144faf3d0339150f35b05a05d947a3f7f881",
+    "loader_unchanged": true,
+    "readback_verified": true
+  },
+  "loader_sha256": "17d51eeff9fb6abe1a7024a108006248e0aaebdaae52de69a3e26c000565d4bf",
+  "stock_backup_sha256": "c63057eaf08b8625e7ac2fc7270c06d75515e78fdbdd46080bdf4b696984ec67",
+  "stock_loader_entry": true,
+  "custom_loader_entry_and_restart": true,
+  "passive_epr": {
+    "host_elapsed_us": 12009585,
+    "measurement_records": 533,
+    "distinct_acquisitions": 455,
+    "voltage_uv_min": 27892767,
+    "voltage_uv_max": 27904681,
+    "all_calibrated": true,
+    "pd_events": {
+      "Rx": 124,
+      "Stats": 1,
+      "State": 1
+    },
+    "capture_counters": [
+      [
+        124,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        910,
+        0
+      ]
+    ],
+    "final_snapshot": {
+      "active_command": null,
+      "available": true,
+      "contract": null,
+      "event_publish_failures": 0,
+      "event_queue_drops": 0,
+      "last_command": {
+        "command_id": 2,
+        "reason": "Stopped",
+        "released": true
+      },
+      "last_profile": null,
+      "last_session": {
+        "command_id": 1,
+        "reason": "Stopped",
+        "released": true
+      },
+      "pending_profile": null,
+      "selected_profile": null,
+      "source_profiles": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "state": "Detached"
+    }
+  },
+  "active_profile_switching_hardware_tested": false,
+  "checks": {
+    "host_tests": 38,
+    "host_and_firmware_clippy": true,
+    "release_link": true
+  },
+  "final_image": {
+    "application_bytes": 300684,
+    "verification": {
+      "application_sha256": "ab5f41d84df4966b1f5f1be758147f54e3f542c899bc0ec87e0f57dac5a302f2",
+      "loader_unchanged": true,
+      "readback_verified": true
+    },
+    "elapsed_us": 10011807,
+    "measurement_records": 435,
+    "distinct_acquisitions": 369,
+    "voltage_uv_min": 27894915,
+    "voltage_uv_max": 27906829,
+    "pd_events": {
+      "Rx": 108
+    },
+    "capture_counters": [],
+    "final_snapshot": {
+      "active_command": null,
+      "available": true,
+      "contract": null,
+      "event_publish_failures": 0,
+      "event_queue_drops": 0,
+      "last_command": {
+        "command_id": 2,
+        "reason": "Stopped",
+        "released": true
+      },
+      "last_profile": null,
+      "last_session": {
+        "command_id": 1,
+        "reason": "Stopped",
+        "released": true
+      },
+      "pending_profile": null,
+      "selected_profile": null,
+      "source_profiles": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "state": "Detached"
+    }
+  },
+  "terminal_stats_after_cleanup_drain": [
+    [
+      52,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      912,
+      0
+    ]
+  ]
+}

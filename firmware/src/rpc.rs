@@ -1,5 +1,5 @@
 //! Native USB bulk RPC. Each publish has a bound; metering never waits for a host.
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_usb_synopsys_otg::Driver;
 use km003c_interface::*;
@@ -14,6 +14,7 @@ use postcard_rpc::{
 type Tx = WireTxImpl<CriticalSectionRawMutex, Driver<'static>>;
 
 static STREAM: AtomicBool = AtomicBool::new(false);
+static INTERVAL_MS: AtomicU32 = AtomicU32::new(DEFAULT_STREAM_INTERVAL_MS as u32);
 type LogLine = heapless::String<192>;
 static LOGS: embassy_sync::channel::Channel<CriticalSectionRawMutex, LogLine, 8> =
     embassy_sync::channel::Channel::new();
@@ -51,6 +52,38 @@ fn stream(_: &mut Context, _: VarHeader, enabled: bool) {
     STREAM.store(enabled, Ordering::Relaxed);
 }
 
+fn stream_interval(_: &mut Context, _: VarHeader, ms: u16) -> Result<(), ControlError> {
+    if !valid_stream_interval(ms) {
+        return Err(ControlError::Invalid);
+    }
+    INTERVAL_MS.store(u32::from(ms), Ordering::Relaxed);
+    Ok(())
+}
+
+fn measurement(_: &mut Context, _: VarHeader, _: ()) -> Option<Measurement> {
+    latest_measurement()
+}
+
+fn latest_measurement() -> Option<Measurement> {
+    let (sample, sampled_at_ms, sample_sequence) = crate::measurement::sample_snapshot()?;
+    let corrected = crate::measurement::corrected(sample);
+    Some(Measurement {
+        uptime_ms: embassy_time::Instant::now().as_millis(),
+        sampled_at_ms,
+        sample_sequence,
+        voltage_uv: corrected
+            .map(|s| s.voltage_microvolts)
+            .unwrap_or((sample.bus_nanovolts() / 1000) as u32),
+        current_ua: corrected
+            .map(|s| s.current_microamps)
+            .or_else(|| crate::measurement::uncalibrated_microamps(sample)),
+        temperature_mc: sample.temperature_millicelsius(),
+        calibrated: corrected.is_some(),
+        diagnostic: sample.diagnostic,
+        lines_uv: crate::lines::snapshot().map(|s| s.uv),
+    })
+}
+
 async fn loader(_: &mut Context, _: VarHeader, _: ()) -> LoaderResult {
     crate::enter_loader(0x600d0002).await.map_err(|_| ())
 }
@@ -66,6 +99,8 @@ define_dispatch! {
         | ---------- | ---- | ------- |
         | GetStatus | blocking | status |
         | GetPdStatus | blocking | pd_status |
+        | GetMeasurement | blocking | measurement |
+        | SetStreamInterval | blocking | stream_interval |
         | SetStream | blocking | stream |
         | EnterLoader | async | loader |
         | ControlPd | blocking | pd_control |
@@ -116,11 +151,14 @@ pub async fn run(driver: Driver<'static>, spawner: embassy_executor::Spawner) {
             let mut seq = 0i32;
             loop {
                 let event = crate::pd_service::EVENTS.receive().await;
-                let _ = embassy_time::with_timeout(
+                let sent = embassy_time::with_timeout(
                     embassy_time::Duration::from_millis(20),
                     sender.publish::<PdEvents>(postcard_rpc::header::VarSeq::Seq4(seq), &event),
                 )
                 .await;
+                if !matches!(sent, Ok(Ok(()))) {
+                    crate::pd_service::publish_failed();
+                }
                 seq = seq.wrapping_add(1);
             }
         }
@@ -131,25 +169,11 @@ pub async fn run(driver: Driver<'static>, spawner: embassy_executor::Spawner) {
 async fn publish(sender: Sender<Tx>) {
     let mut seq = 0u32;
     loop {
-        embassy_time::Timer::after_millis(250).await;
+        embassy_time::Timer::after_millis(u64::from(INTERVAL_MS.load(Ordering::Relaxed))).await;
         if !STREAM.load(Ordering::Relaxed) {
             continue;
         }
-        if let crate::measurement::State::Sample(sample) = crate::measurement::snapshot() {
-            let corrected = crate::measurement::corrected(sample);
-            let msg = Measurement {
-                uptime_ms: embassy_time::Instant::now().as_millis(),
-                voltage_uv: corrected
-                    .map(|s| s.voltage_microvolts)
-                    .unwrap_or((sample.bus_nanovolts() / 1000) as u32),
-                current_ua: corrected
-                    .map(|s| s.current_microamps)
-                    .or_else(|| crate::measurement::uncalibrated_microamps(sample)),
-                temperature_mc: sample.temperature_millicelsius(),
-                calibrated: corrected.is_some(),
-                diagnostic: sample.diagnostic,
-                lines_uv: crate::lines::snapshot().map(|s| s.uv),
-            };
+        if let Some(msg) = latest_measurement() {
             let _ = embassy_time::with_timeout(
                 embassy_time::Duration::from_millis(20),
                 sender

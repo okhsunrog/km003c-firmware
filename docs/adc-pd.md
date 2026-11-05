@@ -37,7 +37,10 @@ keeps CS asserted across the command and response, drains received command bytes
 bounds polling, and disables SPI/releases CS on a transfer error. It stops on an
 ID mismatch or bus error. After identity checks it explicitly applies
 `NATIVE_199`, verifies all four registers and waits up to 100 ms for conversion
-ready before publishing the first sample. ADC_CONFIG is written last.
+ready before publishing each sample. ADC_CONFIG is written last. The task now
+polls at 20 ms, with a 100 ms conversion-ready deadline. USB publication has a
+separately configurable 20..5000 ms interval; timestamps and sample sequence
+numbers distinguish fresh acquisitions from repeated snapshots.
 
 The meter UI dedicates three large rows to voltage, signed current and power,
 with temperature and CAL/RAW status below/above them. Button counters remain in

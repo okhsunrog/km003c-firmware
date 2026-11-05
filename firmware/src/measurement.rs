@@ -95,10 +95,28 @@ pub enum State {
     BusError,
 }
 
-static STATE: Mutex<CriticalSectionRawMutex, Cell<State>> = Mutex::new(Cell::new(State::Probing));
+#[derive(Clone, Copy)]
+struct Snapshot {
+    state: State,
+    sampled_at_ms: u64,
+    sequence: u32,
+}
+static STATE: Mutex<CriticalSectionRawMutex, Cell<Snapshot>> = Mutex::new(Cell::new(Snapshot {
+    state: State::Probing,
+    sampled_at_ms: 0,
+    sequence: 0,
+}));
 
 pub fn snapshot() -> State {
-    STATE.lock(Cell::get)
+    STATE.lock(|s| s.get().state)
+}
+
+pub fn sample_snapshot() -> Option<(Sample, u64, u32)> {
+    let s = STATE.lock(Cell::get);
+    match s.state {
+        State::Sample(sample) => Some((sample, s.sampled_at_ms, s.sequence)),
+        _ => None,
+    }
 }
 
 /// Native 2.0.7 at 0x6d78 returns a signed 24-bit result for ADCRANGE=1,
@@ -118,7 +136,15 @@ pub fn uncalibrated_microamps(sample: Sample) -> Option<i32> {
 }
 
 fn publish(state: State) {
-    STATE.lock(|cell| cell.set(state));
+    STATE.lock(|cell| {
+        let mut s = cell.get();
+        s.state = state;
+        if matches!(state, State::Sample(_)) {
+            s.sampled_at_ms = embassy_time::Instant::now().as_millis();
+            s.sequence = s.sequence.wrapping_add(1);
+        }
+        cell.set(s);
+    });
 }
 
 #[derive(Debug)]
@@ -362,13 +388,14 @@ pub async fn task() {
     let mut count = 0u32;
     let (mut bus_min, mut bus_max) = (u32::MAX, 0u32);
     let (mut current_min, mut current_max) = (i32::MAX, i32::MIN);
-    let fresh_deadline = embassy_time::Instant::now() + embassy_time::Duration::from_millis(100);
+    let mut fresh_deadline =
+        embassy_time::Instant::now() + embassy_time::Duration::from_millis(100);
     loop {
         match sensor.sample() {
             Ok(sample) => {
-                if count == 0 && sample.diagnostic & 2 == 0 {
+                if sample.diagnostic & 2 == 0 {
                     if embassy_time::Instant::now() >= fresh_deadline {
-                        log::error!("INA229 first conversion timeout");
+                        log::error!("INA229 conversion timeout");
                         retain(1, 0xe008);
                         publish(State::BusError);
                         return;
@@ -376,6 +403,8 @@ pub async fn task() {
                     embassy_time::Timer::after_millis(2).await;
                     continue;
                 }
+                fresh_deadline =
+                    embassy_time::Instant::now() + embassy_time::Duration::from_millis(100);
                 init_retain(1, 3);
                 init_retain(12, u32::from(sample.diagnostic));
                 count += 1;
@@ -424,7 +453,7 @@ pub async fn task() {
                 } else {
                     init_retain(13, 0);
                 }
-                log::info!(
+                log::debug!(
                     "ADC bus={} nV shunt={} pV Iraw={} I0={:?} uA diag={:04x}",
                     sample.bus_nanovolts(),
                     sample.shunt_picovolts(),
@@ -442,6 +471,7 @@ pub async fn task() {
                 return;
             }
         }
-        embassy_time::Timer::after_millis(250).await;
+        embassy_time::Timer::after_millis(u64::from(km003c_interface::MIN_STREAM_INTERVAL_MS))
+            .await;
     }
 }

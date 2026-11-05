@@ -2,13 +2,17 @@
 //! attached, and recreate the protocol state after a cable disconnect/flip.
 use crate::{pd_buffered::Buffered, pd_service as telemetry, pd_tx};
 use embassy_futures::select::{Either, select};
-use km003c_interface::PdEndReason;
+use km003c_interface::{FixedProfile, PdEndReason};
 
 fn report(state: &str, input: u8) {
     telemetry::cc_state(state, input);
 }
 
-pub async fn run(rx: &mut Buffered, volts: u16, seconds: u16) -> Result<(), PdEndReason> {
+pub async fn run(
+    rx: &mut Buffered,
+    profile: FixedProfile,
+    seconds: u16,
+) -> Result<(), PdEndReason> {
     let mut waiting = false;
     loop {
         let cc = match pd_tx::prepare().await {
@@ -31,8 +35,11 @@ pub async fn run(rx: &mut Buffered, volts: u16, seconds: u16) -> Result<(), PdEn
             .map_err(|_| PdEndReason::AttachFailed)?;
         pd_tx::extend_lease(seconds);
         report("attached", cc.number());
-        telemetry::sink_status("starting", u32::from(volts) * 1000);
-        let outcome = select(crate::pd_sink::run(rx, volts), pd_tx::disconnected()).await;
+        let profile = telemetry::snapshot().selected_profile.unwrap_or(profile);
+        telemetry::sink_status("starting", u32::from(profile.volts) * 1000);
+        let outcome = select(crate::pd_sink::run(rx, profile), pd_tx::disconnected()).await;
+        telemetry::transition_started();
+        telemetry::cancel_profiles();
         pd_tx::release_and_wait()
             .await
             .map_err(|_| PdEndReason::ReleaseFailed)?;

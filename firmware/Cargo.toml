@@ -23,7 +23,7 @@ embedded-graphics = "0.8.2"
 embedded-hal = "1.0.0"
 embedded-hal-async = "1.0.0"
 heapless = "0.9.3"
-km003c-drivers = { version = "0.1.0", path = "../crates/km003c-drivers" }
+km003c-drivers = { version = "0.1.0", path = "../crates/km003c-drivers", features = ["usbpd"] }
 km003c-interface = { version = "0.1.0", path = "../crates/km003c-interface" }
 log = { version = "0.4.34", default-features = false }
 postcard-rpc = { git = "https://github.com/jamesmunns/postcard-rpc", version = "0.12.1", default-features = false, features = ["embassy-usb-0_6-server"], rev = "2469ebc6" }

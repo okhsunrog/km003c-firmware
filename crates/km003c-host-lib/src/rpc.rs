@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow, ensure};
 use km003c_interface::{
-    ControlPd, EnterLoader, GetPdStatus, GetStatus, PdControl, SetStream, Status,
+    ControlPd, EnterLoader, FixedProfile, GetMeasurement, GetPdStatus, GetStatus, Measurement,
+    PdControl, SetStream, SetStreamInterval, Status,
 };
 use km003c_lib::{
     DeviceSelector,
@@ -78,6 +79,7 @@ impl Client {
     }
 
     pub async fn pd_status(&self) -> Result<km003c_interface::PdSnapshot> {
+        self.require_protocol()?;
         Ok(tokio::time::timeout(
             Duration::from_secs(1),
             self.rpc.send_resp::<GetPdStatus>(&()),
@@ -92,6 +94,39 @@ impl Client {
         )
         .await??;
         Ok(())
+    }
+
+    fn require_protocol(&self) -> Result<()> {
+        ensure!(
+            self.protocol_version == km003c_interface::PROTOCOL_VERSION,
+            "requires firmware protocol {}; update the device first (device reports {})",
+            km003c_interface::PROTOCOL_VERSION,
+            self.protocol_version
+        );
+        Ok(())
+    }
+
+    pub async fn stream_interval(&self, ms: u16) -> Result<()> {
+        self.require_protocol()?;
+        ensure!(
+            km003c_interface::valid_stream_interval(ms),
+            "measurement interval must be 20..5000 ms"
+        );
+        tokio::time::timeout(
+            Duration::from_secs(3),
+            self.rpc.send_resp::<SetStreamInterval>(&ms),
+        )
+        .await??
+        .map_err(|e| anyhow!("interval rejected: {e:?}"))
+    }
+
+    pub async fn measurement(&self) -> Result<Option<Measurement>> {
+        self.require_protocol()?;
+        Ok(tokio::time::timeout(
+            Duration::from_secs(3),
+            self.rpc.send_resp::<GetMeasurement>(&()),
+        )
+        .await??)
     }
 
     pub async fn control(&self, command: PdControl) -> Result<u32> {
@@ -112,20 +147,31 @@ impl Client {
     /// A reset may interrupt its own reply. Success is DFU on the same port,
     /// never merely a timeout or a disconnected RPC handle.
     pub async fn loader(&self) -> Result<()> {
-        let _ = tokio::time::timeout(
+        let response = tokio::time::timeout(
             Duration::from_secs(2),
             self.rpc.send_resp::<EnterLoader>(&()),
         )
         .await;
+        if matches!(response, Ok(Ok(Err(())))) {
+            anyhow::bail!("device refused loader entry: CC release was not confirmed");
+        }
         wait_dfu(&self.selector).await
     }
 }
 
 pub fn validate_control(command: PdControl) -> Result<()> {
     match command {
-        PdControl::Sink { volts, seconds } => ensure!(
-            [5, 9, 12, 15, 20].contains(&volts) && (1..=600).contains(&seconds),
-            "sink requires 5/9/12/15/20 V and 1..600 seconds"
+        PdControl::Sink {
+            volts,
+            seconds,
+            current_ma,
+        } => ensure!(
+            (FixedProfile { volts, current_ma }).valid() && (1..=600).contains(&seconds),
+            "sink requires 5/9/12/15/20 V, 100..3000 mA in 10 mA steps, and 1..600 seconds"
+        ),
+        PdControl::SetProfile { volts, current_ma } => ensure!(
+            (FixedProfile { volts, current_ma }).valid(),
+            "profile requires 5/9/12/15/20 V and 100..3000 mA in 10 mA steps"
         ),
         PdControl::Monitor { input: Some(n) } => {
             ensure!([1, 2].contains(&n), "CC input must be 1, 2 or auto")

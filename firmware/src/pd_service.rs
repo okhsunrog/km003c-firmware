@@ -6,15 +6,39 @@ use crate::{
 use embassy_futures::select::{Either, select};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel::Channel};
 use km003c_interface::{
-    ControlError, ControlResult, PdCompletion, PdControl, PdEndReason, PdEvent, PdSnapshot, PdState,
+    ControlError, ControlResult, FixedOffer, FixedProfile, PdCompletion, PdControl, PdEndReason,
+    PdEvent, PdSnapshot, PdState, ProfileCompletion, ProfileError, ResetKind,
 };
 
 pub static EVENTS: Channel<CriticalSectionRawMutex, PdEvent, 32> = Channel::new();
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 // OWNER reserves a queued/running capture. Stop cannot clear a newer reservation.
 static OWNER: AtomicU32 = AtomicU32::new(0);
 static NEXT: AtomicU32 = AtomicU32::new(1);
 static CURRENT: AtomicU32 = AtomicU32::new(0);
+static PROFILE_ALLOWED: AtomicBool = AtomicBool::new(false);
+// Stop must win even if the high-priority DPM finishes a transition while the
+// USB handler is releasing the CC hardware.
+static STOPPING: AtomicBool = AtomicBool::new(false);
+static EVENT_QUEUE_DROPS: AtomicU32 = AtomicU32::new(0);
+static EVENT_PUBLISH_FAILURES: AtomicU32 = AtomicU32::new(0);
+
+fn event(event: PdEvent) {
+    if EVENTS.try_send(event).is_err() {
+        EVENT_QUEUE_DROPS.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+pub fn publish_failed() {
+    EVENT_PUBLISH_FAILURES.fetch_add(1, Ordering::Relaxed);
+}
+
+pub struct ProfileRequest {
+    pub id: u32,
+    pub profile: FixedProfile,
+    owner: u32,
+}
+static PROFILES: Channel<CriticalSectionRawMutex, ProfileRequest, 1> = Channel::new();
 static SNAPSHOT: embassy_sync::blocking_mutex::Mutex<
     CriticalSectionRawMutex,
     core::cell::Cell<PdSnapshot>,
@@ -24,13 +48,112 @@ static SNAPSHOT: embassy_sync::blocking_mutex::Mutex<
     active_command: None,
     last_session: None,
     last_command: None,
+    contract: None,
+    selected_profile: None,
+    pending_profile: None,
+    last_profile: None,
+    source_profiles: [None; 7],
+    event_queue_drops: 0,
+    event_publish_failures: 0,
 }));
+
+pub fn source_profiles(
+    pdos: &[usbpd::protocol_layer::message::data::source_capabilities::PowerDataObject],
+) {
+    use usbpd::protocol_layer::message::data::source_capabilities::PowerDataObject;
+    let offers = core::array::from_fn(|i| match pdos.get(i) {
+        Some(PowerDataObject::FixedSupply(f)) if f.raw_voltage() > 0 => Some(FixedOffer {
+            position: (i + 1) as u8,
+            millivolts: u32::from(f.raw_voltage()) * 50,
+            max_current_ma: f.raw_max_current() * 10,
+        }),
+        _ => None,
+    });
+    SNAPSHOT.lock(|s| {
+        let mut x = s.get();
+        x.source_profiles = offers;
+        s.set(x);
+    });
+}
+
+pub fn transition_started() {
+    PROFILE_ALLOWED.store(false, Ordering::Release);
+    SNAPSHOT.lock(|s| {
+        let mut x = s.get();
+        x.contract = None;
+        s.set(x);
+    });
+}
+
+pub fn contract_ready(profile: FixedProfile) {
+    SNAPSHOT.lock(|s| {
+        if STOPPING.load(Ordering::Acquire) {
+            return;
+        }
+        let mut x = s.get();
+        x.contract = Some(profile);
+        x.selected_profile = Some(profile);
+        s.set(x);
+        PROFILE_ALLOWED.store(x.pending_profile.is_none(), Ordering::Release);
+    });
+    state(PdState::Ready, u32::from(profile.volts) * 1000);
+}
+
+pub fn profile_finished(id: u32, result: Result<FixedProfile, ProfileError>) {
+    SNAPSHOT.lock(|s| {
+        let mut x = s.get();
+        if x.pending_profile == Some(id) {
+            x.pending_profile = None;
+            x.last_profile = Some(ProfileCompletion {
+                command_id: id,
+                result,
+            });
+        }
+        s.set(x);
+        PROFILE_ALLOWED.store(
+            x.contract.is_some()
+                && x.pending_profile.is_none()
+                && !STOPPING.load(Ordering::Acquire),
+            Ordering::Release,
+        );
+    });
+}
+
+pub async fn next_profile() -> ProfileRequest {
+    loop {
+        let r = PROFILES.receive().await;
+        if r.owner == OWNER.load(Ordering::Acquire)
+            && snapshot().pending_profile == Some(r.id)
+            && !STOPPING.load(Ordering::Acquire)
+        {
+            return r;
+        }
+        profile_finished(r.id, Err(ProfileError::Cancelled));
+    }
+}
+
+/// The DPM future may be dropped on disconnect before it consumes a command.
+/// Drain it here so a completed Cancelled command cannot run after reattach.
+pub fn cancel_profiles() {
+    while let Ok(r) = PROFILES.try_receive() {
+        profile_finished(r.id, Err(ProfileError::Cancelled));
+    }
+    if let Some(id) = snapshot().pending_profile {
+        profile_finished(id, Err(ProfileError::Cancelled));
+    }
+}
+
+pub fn profile_start(id: u32) {
+    CURRENT.store(id, Ordering::Release);
+}
 
 pub fn snapshot() -> PdSnapshot {
     SNAPSHOT.lock(|s| {
         let mut x = s.get();
         let owner = OWNER.load(Ordering::Acquire);
         x.active_command = (owner != 0).then_some(owner);
+        x.event_queue_drops = EVENT_QUEUE_DROPS.load(Ordering::Relaxed);
+        x.event_publish_failures = EVENT_PUBLISH_FAILURES.load(Ordering::Relaxed);
         x
     })
 }
@@ -77,15 +200,24 @@ pub fn control(command: PdControl) -> ControlResult {
         return Err(ControlError::Unavailable);
     }
     match command {
-        PdControl::Sink { volts, seconds }
-            if ![5, 9, 12, 15, 20].contains(&volts) || !(1..=600).contains(&seconds) =>
-        {
+        PdControl::Sink {
+            volts,
+            seconds,
+            current_ma,
+        } if !(FixedProfile { volts, current_ma }).valid() || !(1..=600).contains(&seconds) => {
             return Err(ControlError::Invalid);
         }
         PdControl::Monitor { input: Some(n) } if n != 1 && n != 2 => {
             return Err(ControlError::Invalid);
         }
         PdControl::Stop => {
+            SNAPSHOT.lock(|s| {
+                STOPPING.store(true, Ordering::Release);
+                PROFILE_ALLOWED.store(false, Ordering::Release);
+                let mut x = s.get();
+                x.contract = None;
+                s.set(x);
+            });
             crate::pd_tx::release();
         }
         _ => {}
@@ -97,6 +229,35 @@ pub fn control(command: PdControl) -> ControlResult {
     } else {
         id
     };
+    if let PdControl::SetProfile { volts, current_ma } = command {
+        let profile = FixedProfile { volts, current_ma };
+        if !profile.valid() {
+            return Err(ControlError::Invalid);
+        }
+        let owner = SNAPSHOT.lock(|s| {
+            let owner = OWNER.load(Ordering::Acquire);
+            if owner == 0
+                || STOPPING.load(Ordering::Acquire)
+                || PROFILE_ALLOWED
+                    .compare_exchange(true, false, Ordering::AcqRel, Ordering::Acquire)
+                    .is_err()
+            {
+                return Err(ControlError::Busy);
+            }
+            let mut x = s.get();
+            x.pending_profile = Some(id);
+            s.set(x);
+            Ok(owner)
+        })?;
+        if PROFILES
+            .try_send(ProfileRequest { id, profile, owner })
+            .is_err()
+        {
+            profile_finished(id, Err(ProfileError::Cancelled));
+            return Err(ControlError::Busy);
+        }
+        return Ok(id);
+    }
     if !matches!(command, PdControl::Stop)
         && OWNER
             .compare_exchange(0, id, Ordering::AcqRel, Ordering::Acquire)
@@ -117,7 +278,7 @@ pub fn state(state: PdState, value: u32) {
         x.state = state;
         s.set(x);
     });
-    let _ = EVENTS.try_send(PdEvent::State {
+    event(PdEvent::State {
         command_id: CURRENT.load(Ordering::Acquire),
         state,
         value,
@@ -157,13 +318,24 @@ pub fn sink_rx(event: km003c_drivers::pd::Event, meta: Meta) {
         let mut bytes = [0; 30];
         let wire = p.wire();
         bytes[..wire.len()].copy_from_slice(wire);
-        let _ = EVENTS.try_send(PdEvent::Rx {
+        self::event(PdEvent::Rx {
             sequence: meta.sequence,
             input: meta.input,
             end_us: meta.end_us,
             sop: p.sop as u8,
             bytes,
             len: wire.len() as u8,
+        });
+    } else {
+        self::event(PdEvent::Reset {
+            sequence: meta.sequence,
+            input: meta.input,
+            end_us: meta.end_us,
+            kind: match event {
+                km003c_drivers::pd::Event::HardReset => ResetKind::Hard,
+                km003c_drivers::pd::Event::CableReset => ResetKind::Cable,
+                _ => unreachable!(),
+            },
         });
     }
 }
@@ -172,7 +344,7 @@ pub fn sink_tx(data: &[u8]) {
     let mut bytes = [0; 30];
     bytes[..data.len()].copy_from_slice(data);
     let (rx_to_tx_cycles, decode_cycles) = crate::pd_sink::timing();
-    let _ = EVENTS.try_send(PdEvent::Tx {
+    event(PdEvent::Tx {
         bytes,
         len: data.len() as u8,
         rx_to_tx_cycles,
@@ -209,6 +381,9 @@ async fn task() {
         let request = COMMANDS.receive().await;
         CURRENT.store(request.id, Ordering::Release);
         let command = request.command;
+        if !matches!(command, PdControl::Stop) {
+            STOPPING.store(false, Ordering::Release);
+        }
         let mut reason = PdEndReason::Completed;
         let mut stop_id = None;
         match command {
@@ -233,12 +408,27 @@ async fn task() {
                 );
                 continue;
             }
-            PdControl::Sink { volts, seconds } => {
+            PdControl::Sink {
+                volts,
+                seconds,
+                current_ma,
+            } => {
+                SNAPSHOT.lock(|s| {
+                    let mut x = s.get();
+                    x.selected_profile = Some(FixedProfile { volts, current_ma });
+                    x.last_profile = None;
+                    x.source_profiles = [None; 7];
+                    s.set(x);
+                });
                 let outcome = select(
                     COMMANDS.receive(),
                     embassy_time::with_timeout(
                         embassy_time::Duration::from_secs(u64::from(seconds)),
-                        crate::pd_session::run(&mut rx, volts, seconds),
+                        crate::pd_session::run(
+                            &mut rx,
+                            FixedProfile { volts, current_ma },
+                            seconds,
+                        ),
                     ),
                 )
                 .await;
@@ -264,7 +454,10 @@ async fn task() {
                     reason = PdEndReason::MonitorError;
                 }
             }
+            PdControl::SetProfile { .. } => unreachable!("profile requests go to the active DPM"),
         }
+        transition_started();
+        cancel_profiles();
         let released = crate::pd_tx::release_and_wait().await;
         let stopped = rx.stop();
         let clean = released.is_ok() && stopped;
@@ -287,7 +480,7 @@ async fn task() {
             let _ = OWNER.compare_exchange(request.id, 0, Ordering::AcqRel, Ordering::Acquire);
         });
         let s = rx.stats();
-        let _ = EVENTS.try_send(PdEvent::Stats {
+        event(PdEvent::Stats {
             counters: [
                 s.frames,
                 s.overruns,

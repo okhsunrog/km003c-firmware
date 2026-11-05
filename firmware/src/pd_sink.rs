@@ -1,21 +1,25 @@
 //! Selected-CC software PHY adapter for the crates.io usbpd sink stack.
 //! The stack owns GoodCRC, IDs, retries, reset handling and power negotiation.
 use crate::{pd_buffered::Buffered, pd_service as telemetry, pd_tx};
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use km003c_drivers::pd::{Event, Sop, tx::Frame};
-use uom::si::{electric_current::milliampere, electric_potential::millivolt};
+use km003c_drivers::pd_power::fixed_request;
+use km003c_interface::{FixedProfile, ProfileError};
 use usbpd::{
     protocol_layer::message::data::{
-        request::{CurrentRequest, PowerSource, VoltageRequest},
-        source_capabilities::SourceCapabilities,
+        request::PowerSource, source_capabilities::SourceCapabilities,
     },
-    sink::{device_policy_manager::DevicePolicyManager, policy_engine::Sink},
-    units::{ElectricCurrent, ElectricPotential},
+    protocol_layer::message::header::{ControlMessageType, DataMessageType, Header},
+    sink::{
+        device_policy_manager::{DevicePolicyManager, Event as PolicyEvent},
+        policy_engine::Sink,
+    },
 };
 use usbpd_traits::{Driver, DriverRxError, DriverTxError};
 
 static RX_END: AtomicU32 = AtomicU32::new(0);
 static DECODE_CYCLES: AtomicU32 = AtomicU32::new(0);
+static REQUEST_REJECTED: AtomicBool = AtomicBool::new(false);
 static PHASE_CYCLES: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
 
 pub fn phases() -> [u32; 4] {
@@ -101,6 +105,13 @@ impl Driver for Phy<'_> {
                 telemetry::sink_rx(event, meta);
                 match event {
                     Event::Packet(p) if p.sop == Sop::Sop => {
+                        let header = Header(p.header());
+                        if !header.extended()
+                            && header.num_objects() == 0
+                            && header.message_type_raw() == ControlMessageType::Reject as u8
+                        {
+                            REQUEST_REJECTED.store(true, Ordering::Release);
+                        }
                         RX_END.store(meta.end_cycles, Ordering::Relaxed);
                         DECODE_CYCLES.store(
                             unsafe { (0xe0001004 as *const u32).read_volatile() }
@@ -123,6 +134,15 @@ impl Driver for Phy<'_> {
     }
 
     async fn transmit(&mut self, data: &[u8]) -> Result<(), DriverTxError> {
+        if data.len() >= 2 {
+            let header = Header(u16::from_le_bytes([data[0], data[1]]));
+            if !header.extended()
+                && header.num_objects() > 0
+                && header.message_type_raw() == DataMessageType::Request as u8
+            {
+                REQUEST_REJECTED.store(false, Ordering::Release);
+            }
+        }
         let result = pd_tx::transmit(
             self.rx,
             Frame::Packet {
@@ -174,49 +194,114 @@ impl usbpd::timers::Timer for Clock {
 }
 
 struct Policy {
-    target_mv: u32,
+    desired: FixedProfile,
+    active: Option<FixedProfile>,
+    pending_profile: Option<u32>,
 }
 
 impl DevicePolicyManager for Policy {
     async fn request(&mut self, caps: &SourceCapabilities) -> PowerSource {
-        let request = PowerSource::new_fixed(
-            CurrentRequest::Specific(ElectricCurrent::new::<milliampere>(100)),
-            VoltageRequest::Specific(ElectricPotential::new::<millivolt>(self.target_mv)),
-            caps,
+        telemetry::source_profiles(caps.pdos());
+        telemetry::transition_started();
+        let request = fixed_request(
+            caps.pdos(),
+            u32::from(self.desired.volts) * 1000,
+            self.desired.current_ma,
         );
         match request {
-            Ok(r) => {
-                telemetry::sink_status("request", self.target_mv);
+            Some(r) => {
+                telemetry::sink_status("request", u32::from(self.desired.volts) * 1000);
                 r
             }
-            Err(_) => {
-                telemetry::sink_status("unsupported_using_5v", self.target_mv);
-                self.target_mv = 5000;
-                PowerSource::new_fixed(
-                    CurrentRequest::Specific(ElectricCurrent::new::<milliampere>(100)),
-                    VoltageRequest::Safe5V,
-                    caps,
-                )
-                .unwrap()
+            None => {
+                if let Some(id) = self.pending_profile.take() {
+                    telemetry::profile_finished(id, Err(ProfileError::Unsupported));
+                }
+                telemetry::sink_status(
+                    "unsupported_using_5v",
+                    u32::from(self.desired.volts) * 1000,
+                );
+                self.desired = FixedProfile {
+                    volts: 5,
+                    current_ma: 100,
+                };
+                // A malformed source must not turn a failed selection into a
+                // panic or an unadvertised request.
+                match fixed_request(caps.pdos(), 5000, 100) {
+                    Some(r) => r,
+                    None => core::future::pending().await,
+                }
             }
         }
     }
 
     async fn transition_power(&mut self, _: &PowerSource) {
         // Called by usbpd after Accept + PS_RDY, not merely after sending RDO.
-        telemetry::sink_status("contract_ready", self.target_mv);
+        self.active = Some(self.desired);
+        telemetry::contract_ready(self.desired);
+        if let Some(id) = self.pending_profile.take() {
+            telemetry::profile_finished(id, Ok(self.desired));
+        }
+    }
+
+    async fn get_event(&mut self, caps: &SourceCapabilities) -> PolicyEvent {
+        // usbpd 2 calls this after both Reject and Wait. Wait keeps the request
+        // pending: the PE retries after tSinkRequest, without a new host command.
+        // Only an actual Reject completes the command as rejected.
+        if REQUEST_REJECTED.swap(false, Ordering::AcqRel)
+            && let Some(id) = self.pending_profile.take()
+        {
+            self.desired = self.active.unwrap_or(FixedProfile {
+                volts: 5,
+                current_ma: 100,
+            });
+            if let Some(active) = self.active {
+                telemetry::contract_ready(active);
+            }
+            telemetry::profile_finished(id, Err(ProfileError::Rejected));
+        }
+        if self.pending_profile.is_some() {
+            return core::future::pending().await;
+        }
+        loop {
+            let r = telemetry::next_profile().await;
+            let Some(request) = fixed_request(
+                caps.pdos(),
+                u32::from(r.profile.volts) * 1000,
+                r.profile.current_ma,
+            ) else {
+                telemetry::profile_finished(r.id, Err(ProfileError::Unsupported));
+                continue;
+            };
+            telemetry::profile_start(r.id);
+            telemetry::transition_started();
+            self.desired = r.profile;
+            self.pending_profile = Some(r.id);
+            telemetry::sink_status("request", u32::from(r.profile.volts) * 1000);
+            return PolicyEvent::RequestPower(request);
+        }
     }
 
     async fn hard_reset(&mut self) {
+        self.active = None;
+        telemetry::transition_started();
+        if let Some(id) = self.pending_profile.take() {
+            telemetry::profile_finished(id, Err(ProfileError::Cancelled));
+        }
+        self.desired = telemetry::snapshot()
+            .selected_profile
+            .unwrap_or(self.desired);
         telemetry::sink_status("transition_default", 5000);
     }
 }
 
-pub async fn run(rx: &mut Buffered, volts: u16) -> Result<(), ()> {
+pub async fn run(rx: &mut Buffered, profile: FixedProfile) -> Result<(), ()> {
     let mut sink = Sink::<_, Clock, _>::new(
         Phy { rx },
         Policy {
-            target_mv: u32::from(volts) * 1000,
+            desired: profile,
+            active: None,
+            pending_profile: None,
         },
     );
     if let Err(error) = sink.run().await {

@@ -15,7 +15,8 @@ just check
 just cli capture
 just cli monitor auto
 just cli monitor 2
-just cli sink 20
+just cli sink 20 --current-ma 100
+just cli session --output capture.ndjson
 just cli loader
 ```
 
@@ -25,9 +26,30 @@ just cli loader
 verified with an unloaded charger. PPS/EPR policy remains unimplemented.
 Use active commands with an unloaded charger during development.
 
+`session` records ADC, raw PD traffic, reset events and command results together.
+It starts passively by default. For an unloaded charger,
+`just cli session --sink 15 --current-ma 100 --output profiles.ndjson` starts an
+active SPR session. Type `profile 9 100`, `profile 5 100`, `status`, `stop` or
+`quit` in that terminal. Profile changes keep the same CC attachment and finite
+session lease. A requested profile becomes confirmed only after PS_RDY; the
+recording includes advertised fixed PDOs and any rejection/cancellation.
+
+ADC topic intervals are configurable with `--interval-ms 20..5000` (milliseconds).
+Active/interactive sessions default to 20 ms; passive `monitor` and `capture`
+default to 250 ms. Every sample carries its acquisition time and sequence, so
+repeated snapshots can be distinguished from fresh measurements. This is not a
+guarantee of 1 kHz acquisition. See [the wire and CLI reference](docs/rpc.md).
+
+Use passive monitoring when an attached device already negotiates PD. Before
+enabling the meter's sink, disable or disconnect that device's PD controller;
+two sinks on the shared CC line would both acknowledge messages and change Rd.
+The firmware does not yet provide isolated upstream/downstream PD ports.
+
 Holding Exit for two seconds or issuing the RPC loader command returns to native
 DFU. Holding Exit while connecting power through the HID port enters that loader
 independently of application USB. Keep an original package available for recovery.
+`just cli loader` supports both stock and custom firmware, is harmless when
+already in DFU, and confirms DFU on the same physical USB port before succeeding.
 Updates require readback and unchanged-loader verification. Working custom images
 stay installed between tests; there is no automatic stock restore or test timeout.
 
@@ -59,6 +81,7 @@ GoodCRC does not wait for USB. Bounded diagnostics can drop records under load.
 ## Documentation
 
 - [RPC protocol and host client](docs/rpc.md)
+- [Loader and live passive EPR capture acceptance](hardware/host-control/README.md)
 - [PD transmission and electrical controls](docs/pd-transmit.md)
 - [PD receive buffering](docs/pd-buffered.md)
 - [Line ADC scale](docs/line-adc.md), [INA229/calibration](docs/adc-pd.md)
@@ -97,7 +120,7 @@ just maneuver maneuvers/passive.json artifacts/passive.ndjson
 ```
 
 `backup`, `verify`, `start` and `diagnostics` operate in native DFU. `flash`
-can enter DFU from the custom RPC application. The evidence directory must be
+can enter DFU from either the stock or custom application. The evidence directory must be
 new. The writer
 checks the known HW2.1 loader before and after updating and compares the full
 application readback. A failed transfer leaves the device in DFU. It does not

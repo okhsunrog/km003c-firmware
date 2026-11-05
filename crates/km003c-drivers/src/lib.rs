@@ -11,3 +11,5 @@ pub mod sc7a20;
 
 pub mod lines;
 pub mod pd_pool;
+#[cfg(feature = "usbpd")]
+pub mod pd_power;
